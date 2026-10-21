@@ -28,6 +28,9 @@ console.log("read_report:", report.isError ? `ERROR ${report.content[0].text}` :
 if (tools.some((t) => t.name === "github_profile")) {
   const gh = await client.callTool({ name: "github_profile", arguments: {} });
   console.log("github_profile:", gh.isError ? `ERROR ${gh.content[0].text}` : gh.content[0].text);
+
+  const prs = await client.callTool({ name: "github_open_prs", arguments: { limit: 5 } });
+  console.log("github_open_prs:", prs.isError ? `ERROR ${prs.content[0].text}` : prs.content[0].text);
 }
 
 await client.close();

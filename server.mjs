@@ -12,7 +12,7 @@ import { z } from "zod";
 const REPORT_SCOPE = "read:reports";
 const GITHUB_SCOPE = "read:github";
 // Which scope each tool needs. A call without it gets HTTP 403 before the tool runs.
-const TOOL_SCOPES = { read_report: REPORT_SCOPE, github_profile: GITHUB_SCOPE };
+const TOOL_SCOPES = { read_report: REPORT_SCOPE, github_profile: GITHUB_SCOPE, github_open_prs: GITHUB_SCOPE };
 const MAX_BODY_BYTES = 1024 * 1024;
 
 function httpError(status, code, message) {
@@ -195,6 +195,47 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
           if (!res.ok) return fail(`GitHub API returned ${res.status}`);
           const user = await res.json();
           return { content: [{ type: "text", text: JSON.stringify({ github_login: user.login }) }] };
+        },
+      );
+
+      server.registerTool(
+        "github_open_prs",
+        {
+          description: `List the user's open pull requests on GitHub, newest first (public repositories, through Token Vault). Requires the ${GITHUB_SCOPE} scope.`,
+          inputSchema: { limit: z.number().int().min(1).max(20).default(10).describe("How many to return, 1 to 20") },
+        },
+        async ({ limit }) => {
+          const fail = (text) => ({ isError: true, content: [{ type: "text", text }] });
+          if (!auth.scopes.includes(GITHUB_SCOPE)) {
+            return fail(`insufficient_scope: requires ${GITHUB_SCOPE}`);
+          }
+          if (!exchange) {
+            return fail("token exchange is not configured");
+          }
+          let githubToken;
+          try {
+            githubToken = await exchangeForGithub(auth.token);
+          } catch (err) {
+            return fail(err.message);
+          }
+          const query = encodeURIComponent("is:pr is:open author:@me sort:created-desc");
+          let res;
+          try {
+            res = await fetch(`${github.apiUrl}/search/issues?q=${query}&per_page=${limit}`, {
+              headers: { authorization: `Bearer ${githubToken}`, accept: "application/vnd.github+json" },
+            });
+          } catch {
+            return fail("GitHub API is unreachable");
+          }
+          if (!res.ok) return fail(`GitHub API returned ${res.status}`);
+          const found = await res.json();
+          const prs = (found.items ?? []).map((item) => ({
+            title: item.title,
+            url: item.html_url,
+            repo: String(item.repository_url ?? "").split("/repos/")[1] ?? null,
+            created_at: item.created_at,
+          }));
+          return { content: [{ type: "text", text: JSON.stringify({ open_prs: prs }) }] };
         },
       );
     }

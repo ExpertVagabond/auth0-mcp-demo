@@ -62,9 +62,31 @@ before(async () => {
 
   // Stands in for api.github.com: accepts only tokens that Token Vault issued in these tests.
   githubStub = createServer((req, res) => {
-    const ok = req.url === "/user" && (req.headers.authorization ?? "").startsWith("Bearer gh-token-");
-    res.writeHead(ok ? 200 : 401, { "content-type": "application/json" });
-    res.end(JSON.stringify(ok ? { login: "test-user" } : { message: "Bad credentials" }));
+    const url = new URL(req.url, "http://github.stub");
+    const authed = (req.headers.authorization ?? "").startsWith("Bearer gh-token-");
+    if (!authed) {
+      res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ message: "Bad credentials" }));
+      return;
+    }
+    if (url.pathname === "/user") {
+      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ login: "test-user" }));
+      return;
+    }
+    if (url.pathname === "/search/issues") {
+      const q = url.searchParams.get("q") ?? "";
+      const perPage = Number(url.searchParams.get("per_page") ?? 0);
+      if (!q.includes("is:pr") || !q.includes("author:@me")) {
+        res.writeHead(422, { "content-type": "application/json" }).end(JSON.stringify({ message: "bad query" }));
+        return;
+      }
+      const items = [
+        { title: "Fix token refresh", html_url: "https://github.com/acme/api/pull/12", repository_url: "https://api.github.com/repos/acme/api", created_at: "2026-10-18T09:00:00Z" },
+        { title: "Docs for webhooks", html_url: "https://github.com/acme/docs/pull/4", repository_url: "https://api.github.com/repos/acme/docs", created_at: "2026-10-19T09:00:00Z" },
+      ].slice(0, perPage);
+      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ total_count: items.length, items }));
+      return;
+    }
+    res.writeHead(404).end();
   });
   await new Promise((r) => githubStub.listen(GITHUB_STUB_PORT, r));
 
@@ -221,7 +243,7 @@ test("expired token is rejected", async () => {
 test("valid token without read:reports: whoami works, read_report is refused", async () => {
   const client = await connect(await sign({ scope: "openid profile" }));
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["github_profile", "read_report", "whoami"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["github_open_prs", "github_profile", "read_report", "whoami"]);
 
   const who = await client.callTool({ name: "whoami", arguments: {} });
   const parsed = JSON.parse(who.content[0].text);
@@ -382,4 +404,26 @@ test("github_profile reports a user with no linked GitHub account as a tool erro
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /token exchange failed: There is no connected account/);
   await client.close();
+});
+
+test("github_open_prs lists the user's open pull requests through Token Vault", async () => {
+  const client = await connect(await sign({ scope: "read:github", permissions: ["read:github"], sub: "github|216808416" }));
+  const result = await client.callTool({ name: "github_open_prs", arguments: { limit: 1 } });
+  assert.notEqual(result.isError, true);
+  const parsed = JSON.parse(result.content[0].text);
+  assert.deepEqual(parsed.open_prs, [
+    { title: "Fix token refresh", url: "https://github.com/acme/api/pull/12", repo: "acme/api", created_at: "2026-10-18T09:00:00Z" },
+  ]);
+  assert.doesNotMatch(result.content[0].text, /gh-token-/);
+  await client.close();
+});
+
+test("github_open_prs without read:github gets HTTP 403", async () => {
+  const token = await sign({ scope: "read:reports" });
+  const res = await fetch(MCP_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "github_open_prs", arguments: {} } }),
+  });
+  assert.equal(res.status, 403);
 });
