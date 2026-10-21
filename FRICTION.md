@@ -47,5 +47,10 @@ Token Vault works with a GitHub connection, but linking a user's GitHub account 
 A client grant with subject type client doesn't authorize a user login to the My Account API. The error says the client isn't authorized for the resource server. Creating a grant with `--subject-type user` fixed the login.
 **Would help:** say both grant types exist, and which one the login needs.
 
+## 12. Dynamically registered clients can't use social connections (confirmed live, 2026-10-21)
+A client created through dynamic client registration is third-party and strict. Login through a social connection fails with `github does not exist or is not a domain connection`. Auth0 won't convert the client to first-party (`Only permissive mode clients can be converted`), and registration ignores a request for permissive mode. Social connections can be enabled only for first-party clients. So an MCP client that self-registers can't sign users in on a tenant that uses social logins.
+**Fix that works on this tenant:** a first-party app created ahead of time, with its client ID hardcoded in the MCP client. The MCP spec allows this. The login then works with Google and GitHub, and the token exchange and MCP calls verify live.
+**Would help:** say in the DCR docs that registered clients are third-party and can't use social connections, and point to the pre-registered-client option.
+
 ## Next step for this log
 The on-behalf-of flow and browser login are now verified live (see README). Items 6 to 9 come from that run. Items 4 and 5 are confirmed by live tokens. Item 3 is checked against the MCP spec, though not against an Auth0 example.
