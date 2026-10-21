@@ -14,9 +14,9 @@ Searching for the free developer tier turned up conflicting figures: a monthly-a
 The MCP authorization flow depends on the `WWW-Authenticate` header carrying `resource_metadata`, which points the client at the protected-resource metadata. I built that header from the spec text. The SDKs in the reference examples do this for you, but a developer writing a server in a plain HTTP framework has nothing to copy.
 **Would help:** a copy-paste challenge example in the MCP auth docs for a plain Node HTTP server.
 
-## 4. `resource` and `audience` are easy to mix up (provisional)
-The MCP spec uses a `resource` identifier. OAuth APIs have traditionally used `audience`. The code has to check the audience claim against the resource identifier. Auth0's changelog says it accepts `resource`, but I haven't confirmed that against a live token.
-**Would help:** one example token showing the `aud` claim produced from a `resource` request.
+## 4. `resource` and `audience` are easy to mix up (confirmed live, 2026-10-21)
+The MCP spec uses a `resource` identifier. OAuth APIs have traditionally used `audience`. A login that sent `resource=https://reports.demo.test/` (with the Resource Parameter Compatibility Profile on) produced an `aud` claim that contains that identifier, the same as an `audience` request. The server's audience check passes either way.
+**Would help:** say in the docs that both parameters produce the same `aud` value, and which one to use.
 
 ## 5. Auth0 puts permissions in a different claim than my first build assumed (confirmed from docs, fixed in code)
 My first server read only the `scope` claim. The Auth0 quickstart says permissions come in a `permissions` claim when the resource server uses the `rfc9068_profile_authz` token dialect. A developer following the OAuth shape would get `insufficient_scope` with no clue why. The server now grants a permission only when both the `scope` and `permissions` claims carry it. A token without a `scope` claim is denied everything. That is the safe default, but it means a live tenant whose tokens lack a `scope` claim will fail every tool call. **Live result (2026-10-21):** a client-credentials token from the tenant carried both `scope` and `permissions`, both set to `read:reports`, so the server accepted it. A user login token may differ and still needs checking.
@@ -40,4 +40,4 @@ A signed-in user has no role until one is assigned. A role assigned after login 
 **Would help:** a note after role assignment saying tokens must be reissued.
 
 ## Next step for this log
-The on-behalf-of flow and browser login are now verified live (see README). Items 6 to 9 come from that run. Items 3 to 5 are still provisional: the 401 challenge format and the `resource` claim value need a check against a token from the authorization-code flow with the `resource` parameter.
+The on-behalf-of flow and browser login are now verified live (see README). Items 6 to 9 come from that run. Items 4 and 5 are confirmed by live tokens. Item 3 is still provisional: the 401 challenge format is built from the spec, not from an Auth0 example.

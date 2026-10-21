@@ -22,13 +22,17 @@ const verifier = randomBytes(48).toString("base64url");
 const challenge = createHash("sha256").update(verifier).digest("base64url");
 const state = randomBytes(16).toString("base64url");
 
+// AUTH_PARAM selects how the API is named in the request: "audience" (default) or "resource"
+// (the MCP resource identifier, which needs the Resource Parameter Compatibility Profile).
+const targetParam = process.env.AUTH_PARAM === "resource" ? "resource" : "audience";
+
 const authorize = new URL(`https://${domain}/authorize`);
 authorize.search = new URLSearchParams({
   response_type: "code",
   client_id: clientId,
   redirect_uri: redirectUri,
   scope: "openid profile email read:reports",
-  audience,
+  [targetParam]: audience,
   state,
   code_challenge: challenge,
   code_challenge_method: "S256",
