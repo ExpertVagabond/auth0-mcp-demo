@@ -12,7 +12,7 @@ The announcement says Auth for MCP went generally available on May 6, 2026. A se
 **Fix:** put the status and date on each page.
 
 ## 2. The permissions claim isn't named where it matters (confirmed, and the demo was wrong)
-The quickstart says `rfc9068_profile_authz` puts permissions in a `permissions` claim. My first server read only the `scope` claim, so a token with the right permissions was refused. The server now reads both claims, with a test.
+The quickstart says `rfc9068_profile_authz` puts permissions in a `permissions` claim. My first server read only the `scope` claim, so a token with the right permissions was refused. The server now requires a permission to appear in both the `scope` and `permissions` claims, with tests. A token with `permissions` but no `scope` claim grants nothing.
 **Fix:** the quickstart's "verify the token" step should show the exact claim names and a decoded example token.
 
 ## 3. The 401 challenge and metadata aren't shown (gap)

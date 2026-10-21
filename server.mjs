@@ -32,16 +32,17 @@ export function createMcpApp({ issuer, resource, port, publicBase }) {
         issuer,
         audience: resource,
       });
-      // Auth0 puts granted permissions in `permissions` (RBAC, rfc9068 profile).
-      // The standard OAuth `scope` string is also accepted.
-      const scopes = new Set(typeof payload.scope === "string" ? payload.scope.split(" ") : []);
-      if (Array.isArray(payload.permissions)) {
-        for (const permission of payload.permissions) scopes.add(permission);
-      }
+      // `scope` is what the client was granted. `permissions` (Auth0 RBAC) is what the user holds.
+      // A permission counts only when both claims carry it. Without a `scope` claim nothing is granted.
+      const granted = typeof payload.scope === "string" ? payload.scope.split(" ") : [];
+      const held = Array.isArray(payload.permissions)
+        ? payload.permissions.filter((p) => typeof p === "string")
+        : null;
+      const scopes = held ? granted.filter((s) => held.includes(s)) : granted;
       return {
         auth: {
           sub: payload.sub,
-          scopes: [...scopes],
+          scopes,
           audience: payload.aud,
         },
       };

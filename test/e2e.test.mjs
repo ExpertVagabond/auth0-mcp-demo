@@ -131,11 +131,24 @@ test("valid token with read:reports: read_report returns the report", async () =
   await client.close();
 });
 
-test("permission in the Auth0 permissions claim (no scope string) grants the tool", async () => {
+test("permission must be in both scope and permissions claims when both are present", async () => {
+  // Granted by the client (scope) and held by the user (permissions): allowed.
+  const both = await connect(await sign({ scope: "read:reports", permissions: ["read:reports"] }));
+  const ok = await both.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
+  assert.notEqual(ok.isError, true);
+  await both.close();
+
+  // User holds it but the client was not granted it: refused.
+  const userOnly = await connect(await sign({ scope: "openid", permissions: ["read:reports"] }));
+  const refused = await userOnly.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
+  assert.equal(refused.isError, true);
+  await userOnly.close();
+});
+
+test("permissions claim without a scope claim grants nothing (fails closed)", async () => {
   const client = await connect(await sign({ permissions: ["read:reports"] }));
   const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
-  assert.notEqual(report.isError, true);
-  assert.match(report.content[0].text, /Report for 2026-W43/);
+  assert.equal(report.isError, true);
   await client.close();
 });
 
