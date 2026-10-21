@@ -9,6 +9,14 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 
 const REPORT_SCOPE = "read:reports";
+const MAX_BODY_BYTES = 1024 * 1024;
+
+function httpError(status, code, message) {
+  const err = new Error(message);
+  err.status = status;
+  err.code = code;
+  return err;
+}
 
 export function createMcpApp({ issuer, resource, port, publicBase }) {
   // issuer must end with "/" to match Auth0's iss claim exactly.
@@ -74,13 +82,41 @@ export function createMcpApp({ issuer, resource, port, publicBase }) {
 
   async function readBody(req) {
     const chunks = [];
-    for await (const chunk of req) chunks.push(chunk);
+    let size = 0;
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        throw httpError(413, -32600, "request body too large");
+      }
+      chunks.push(chunk);
+    }
     const raw = Buffer.concat(chunks).toString("utf8");
-    return raw ? JSON.parse(raw) : undefined;
+    if (!raw) return undefined;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      throw httpError(400, -32700, "parse error");
+    }
   }
 
   const httpServer = createServer(async (req, res) => {
-    const url = new URL(req.url, base);
+    try {
+      await handleRequest(req, res);
+    } catch (err) {
+      console.error("request failed:", err);
+      if (!res.headersSent) res.writeHead(500).end();
+      else res.end();
+    }
+  });
+
+  async function handleRequest(req, res) {
+    let url;
+    try {
+      url = new URL(req.url, base);
+    } catch {
+      res.writeHead(400).end();
+      return;
+    }
 
     if (url.pathname === "/.well-known/oauth-protected-resource" || url.pathname === "/.well-known/oauth-protected-resource/mcp") {
       res.writeHead(200, { "content-type": "application/json" });
@@ -111,7 +147,14 @@ export function createMcpApp({ issuer, resource, port, publicBase }) {
       return;
     }
 
-    const body = req.method === "POST" ? await readBody(req) : undefined;
+    let body;
+    try {
+      body = req.method === "POST" ? await readBody(req) : undefined;
+    } catch (err) {
+      res.writeHead(err.status, { "content-type": "application/json", connection: "close" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: err.code, message: err.message }, id: null }));
+      return;
+    }
     const server = buildServer(result.auth);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on("close", () => {
@@ -120,7 +163,7 @@ export function createMcpApp({ issuer, resource, port, publicBase }) {
     });
     await server.connect(transport);
     await transport.handleRequest(req, res, body);
-  });
+  }
 
   return httpServer;
 }

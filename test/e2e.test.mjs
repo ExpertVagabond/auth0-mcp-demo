@@ -130,3 +130,41 @@ test("valid token with read:reports: read_report returns the report", async () =
   assert.match(report.content[0].text, /Report for 2026-W43/);
   await client.close();
 });
+
+test("malformed JSON with a valid token: 400 parse error, server keeps running", async () => {
+  const token = await sign({ scope: "read:reports" });
+  const res = await fetch(MCP_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}` },
+    body: "{not json",
+  });
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).error.code, -32700);
+
+  const client = await connect(token);
+  const who = await client.callTool({ name: "whoami", arguments: {} });
+  assert.match(who.content[0].text, /auth0\|demo-user/);
+  await client.close();
+});
+
+test("oversized body with a valid token: 413, server keeps running", async () => {
+  const token = await sign({ scope: "read:reports" });
+  const big = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "read_report", arguments: { week: "x".repeat(2 * 1024 * 1024) } } });
+  // The server answers 413 and closes the socket while the client is still sending,
+  // so the client may see a broken pipe instead of the response. Either is acceptable.
+  try {
+    const res = await fetch(MCP_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}` },
+      body: big,
+    });
+    assert.equal(res.status, 413);
+  } catch (err) {
+    assert.match(String(err.cause?.message ?? err.message), /EPIPE|ECONNRESET|socket/i);
+  }
+
+  const client = await connect(token);
+  const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
+  assert.match(report.content[0].text, /Report for 2026-W43/);
+  await client.close();
+});
