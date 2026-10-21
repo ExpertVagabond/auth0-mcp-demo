@@ -2,6 +2,7 @@
 // Tokens are validated locally against the issuer's JWKS. The server never sees a password.
 
 import { createServer } from "node:http";
+import { pathToFileURL } from "node:url";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -125,7 +126,7 @@ export function createMcpApp({ issuer, resource, port, publicBase }) {
 }
 
 // Run directly: AUTH0_ISSUER, MCP_RESOURCE and PORT come from the environment.
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const issuer = process.env.AUTH0_ISSUER;
   const resource = process.env.MCP_RESOURCE;
   const port = Number(process.env.PORT ?? 3000);
