@@ -18,7 +18,7 @@ function httpError(status, code, message) {
   return err;
 }
 
-export function createMcpApp({ issuer, resource, port, publicBase }) {
+export function createMcpApp({ issuer, resource, port, publicBase, reports }) {
   // issuer must end with "/" to match Auth0's iss claim exactly.
   const jwks = createRemoteJWKSet(new URL(".well-known/jwks.json", issuer));
   const base = publicBase ?? `http://localhost:${port}`;
@@ -69,17 +69,36 @@ export function createMcpApp({ issuer, resource, port, publicBase }) {
       "read_report",
       {
         description: `Return the weekly report. Requires the ${REPORT_SCOPE} scope.`,
-        inputSchema: { week: z.string().describe("ISO week, e.g. 2026-W43") },
+        inputSchema: { week: z.string().regex(/^\d{4}-W\d{2}$/).describe("ISO week, e.g. 2026-W43") },
       },
       async ({ week }) => {
+        const fail = (text) => ({ isError: true, content: [{ type: "text", text }] });
         if (!auth.scopes.includes(REPORT_SCOPE)) {
-          return {
-            isError: true,
-            content: [{ type: "text", text: `insufficient_scope: requires ${REPORT_SCOPE}` }],
-          };
+          return fail(`insufficient_scope: requires ${REPORT_SCOPE}`);
         }
+        if (!reports) {
+          return fail("reports API is not configured");
+        }
+        // The user's token is not forwarded (the MCP spec forbids token passthrough).
+        // The MCP server calls the reports API with its own service key.
+        let res;
+        try {
+          res = await fetch(`${reports.url}/reports/${week}`, {
+            headers: { "x-service-key": reports.key },
+          });
+        } catch {
+          return fail("reports API is unreachable");
+        }
+        if (res.status === 404) return fail(`no report for ${week}`);
+        if (!res.ok) return fail(`reports API returned ${res.status}`);
+        const report = await res.json();
         return {
-          content: [{ type: "text", text: `Report for ${week}: build passed, two tickets closed.` }],
+          content: [
+            {
+              type: "text",
+              text: `Report for ${report.week}: build ${report.build}; tickets closed: ${report.tickets_closed.join(", ")}`,
+            },
+          ],
         };
       },
     );
@@ -175,7 +194,7 @@ export function createMcpApp({ issuer, resource, port, publicBase }) {
   return httpServer;
 }
 
-// Run directly: AUTH0_ISSUER, MCP_RESOURCE and PORT come from the environment.
+// Run directly: AUTH0_ISSUER, MCP_RESOURCE, PORT, and optionally REPORTS_API_URL and REPORTS_API_KEY.
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const issuer = process.env.AUTH0_ISSUER;
   const resource = process.env.MCP_RESOURCE;
@@ -184,7 +203,11 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.error("Set AUTH0_ISSUER (e.g. https://YOUR-TENANT.us.auth0.com/) and MCP_RESOURCE (API identifier).");
     process.exit(1);
   }
-  createMcpApp({ issuer, resource, port }).listen(port, () => {
+  const reports =
+    process.env.REPORTS_API_URL && process.env.REPORTS_API_KEY
+      ? { url: process.env.REPORTS_API_URL, key: process.env.REPORTS_API_KEY }
+      : undefined;
+  createMcpApp({ issuer, resource, port, reports }).listen(port, () => {
     console.log(`MCP server on http://localhost:${port}/mcp, issuer ${issuer}, resource ${resource}`);
   });
 }

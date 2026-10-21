@@ -33,10 +33,26 @@ In Auth0 you need an API whose identifier equals `MCP_RESOURCE`, with a `read:re
 ## Tools
 
 - `whoami`: returns the token's subject and scopes. No scope required.
-- `read_report(week)`: requires `read:reports`. Without it, the tool returns an error result with `insufficient_scope`.
+- `read_report(week)`: requires `read:reports`. Without it, the tool returns an error result with `insufficient_scope`. With it, the tool fetches the week from the reports API. The week must match `YYYY-Www`.
+
+## Reports API
+
+`reports-api.mjs` is a separate backend. It serves `GET /reports/{week}` and needs the header `x-service-key`.
+
+- Only the MCP server calls it. The user's access token is never forwarded. The MCP spec forbids passing a token through to another API, and the reports API would reject it anyway, because the token's audience is the MCP server.
+- `REPORTS_API_KEY` is a local secret shared between the two processes. Generate it with `openssl rand -hex 32`. It is not an Auth0 credential and it isn't stored in the repo.
+- The MCP server enforces the user's `read:reports` scope before it calls the API. The reports API trusts the service key alone.
+- The real delegation step, where the MCP server exchanges the user's token for a token to the reports API, needs an Auth0 client secret from your tenant. That's the next step after the live check.
+
+Run it:
+
+    REPORTS_API_KEY=$(openssl rand -hex 32) PORT=3100 node reports-api.mjs
+
+Then start the MCP server with `REPORTS_API_URL=http://localhost:3100` and the same `REPORTS_API_KEY`.
 
 ## Files
 
-- `server.mjs`: the server, and the only application code.
-- `test/e2e.test.mjs`: the test suite, including the mock issuer.
-- `FRICTION.md`: developer-experience notes from building this.
+- `server.mjs`: the MCP server.
+- `reports-api.mjs`: the backend reports API.
+- `test/e2e.test.mjs`: the test suite, including the mock issuer and the reports API.
+- `FRICTION.md`, `DOCS-REVIEW.md`: developer-experience notes from building this.

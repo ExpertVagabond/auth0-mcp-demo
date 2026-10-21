@@ -8,17 +8,21 @@ import { generateKeyPair, exportJWK, SignJWT } from "jose";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createMcpApp } from "../server.mjs";
+import { createReportsApi } from "../reports-api.mjs";
 
 const ISSUER_PORT = 4101;
 const MCP_PORT = 4102;
+const REPORTS_PORT = 4103;
 const ISSUER = `http://localhost:${ISSUER_PORT}/`;
 const RESOURCE = "https://reports.demo.test/";
 const MCP_URL = `http://localhost:${MCP_PORT}/mcp`;
+const SERVICE_KEY = "test-service-key";
 
 let privateKey;
 let publicJwk;
 let issuerServer;
 let mcpServer;
+let reportsServer;
 
 before(async () => {
   const pair = await generateKeyPair("RS256");
@@ -35,13 +39,24 @@ before(async () => {
   });
   await new Promise((r) => issuerServer.listen(ISSUER_PORT, r));
 
-  mcpServer = createMcpApp({ issuer: ISSUER, resource: RESOURCE, port: MCP_PORT });
+  reportsServer = createReportsApi({ apiKey: SERVICE_KEY });
+  await new Promise((r) => reportsServer.listen(REPORTS_PORT, r));
+
+  mcpServer = createMcpApp({
+    issuer: ISSUER,
+    resource: RESOURCE,
+    port: MCP_PORT,
+    reports: { url: `http://localhost:${REPORTS_PORT}`, key: SERVICE_KEY },
+  });
   await new Promise((r) => mcpServer.listen(MCP_PORT, r));
 });
 
 after(async () => {
-  await new Promise((r) => mcpServer.close(r));
-  await new Promise((r) => issuerServer.close(r));
+  // fetch keeps sockets alive, so close them first or server.close() never calls back.
+  for (const server of [mcpServer, reportsServer, issuerServer]) {
+    server.closeAllConnections();
+    await new Promise((r) => server.close(r));
+  }
 });
 
 async function sign({ scope = "", permissions, aud = RESOURCE, iss = ISSUER, sub = "auth0|demo-user", expiresIn = "5m" } = {}) {
@@ -187,5 +202,36 @@ test("oversized body with a valid token: 413, server keeps running", async () =>
   const client = await connect(token);
   const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
   assert.match(report.content[0].text, /Report for 2026-W43/);
+  await client.close();
+});
+
+test("reports API refuses a missing or wrong service key", async () => {
+  const url = `http://localhost:${REPORTS_PORT}/reports/2026-W43`;
+  assert.equal((await fetch(url)).status, 401);
+  assert.equal((await fetch(url, { headers: { "x-service-key": "wrong" } })).status, 401);
+});
+
+test("reports API returns the week with the right key, and 404 for an unknown week", async () => {
+  const url = `http://localhost:${REPORTS_PORT}/reports`;
+  const ok = await fetch(`${url}/2026-W43`, { headers: { "x-service-key": SERVICE_KEY } });
+  assert.equal(ok.status, 200);
+  assert.deepEqual((await ok.json()).tickets_closed, ["AUTH-103"]);
+  const missing = await fetch(`${url}/2026-W01`, { headers: { "x-service-key": SERVICE_KEY } });
+  assert.equal(missing.status, 404);
+});
+
+test("read_report with an unknown but well-formed week returns a tool error", async () => {
+  const client = await connect(await sign({ scope: "read:reports" }));
+  const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W01" } });
+  assert.equal(report.isError, true);
+  assert.match(report.content[0].text, /no report for 2026-W01/);
+  await client.close();
+});
+
+test("read_report rejects a week that is not in ISO format", async () => {
+  const client = await connect(await sign({ scope: "read:reports" }));
+  // Schema validation fails before the handler runs. The SDK may report that as an error result or a thrown error.
+  const result = await client.callTool({ name: "read_report", arguments: { week: "../admin" } }).catch((err) => ({ isError: true, err }));
+  assert.equal(result.isError, true);
   await client.close();
 });
