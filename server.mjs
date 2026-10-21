@@ -10,6 +10,9 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { z } from "zod";
 
 const REPORT_SCOPE = "read:reports";
+const GITHUB_SCOPE = "read:github";
+// Which scope each tool needs. A call without it gets HTTP 403 before the tool runs.
+const TOOL_SCOPES = { read_report: REPORT_SCOPE, github_profile: GITHUB_SCOPE };
 const MAX_BODY_BYTES = 1024 * 1024;
 
 function httpError(status, code, message) {
@@ -19,7 +22,7 @@ function httpError(status, code, message) {
   return err;
 }
 
-export function createMcpApp({ issuer, resource, port, publicBase, reports, exchange }) {
+export function createMcpApp({ issuer, resource, port, publicBase, reports, exchange, github }) {
   // issuer must end with "/" to match Auth0's iss claim exactly.
   const jwks = createRemoteJWKSet(new URL(".well-known/jwks.json", issuer));
   const base = publicBase ?? `http://localhost:${port}`;
@@ -53,12 +56,13 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
     }
   }
 
-  // Trade the user's token for one whose audience is the reports API (RFC 8693, Auth0 on-behalf-of).
-  // Results are cached per subject token until shortly before they expire.
+  // Token exchanges (RFC 8693) for a subject token, cached until shortly before they expire.
+  // "api": an access token whose audience is the reports API (on-behalf-of).
+  // "github": the user's GitHub token from Token Vault (federated connection access token).
   const exchangeCache = new Map();
 
-  async function exchangeToken(subjectToken) {
-    const key = createHash("sha256").update(subjectToken).digest("hex");
+  async function cachedExchange(kind, subjectToken, params) {
+    const key = `${kind}:${createHash("sha256").update(subjectToken).digest("hex")}`;
     const cached = exchangeCache.get(key);
     if (cached && cached.expiresAt > Date.now()) return cached.token;
 
@@ -66,23 +70,37 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+        ...params,
         subject_token: subjectToken,
         subject_token_type: "urn:ietf:params:oauth:token-type:access_token",
-        requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
-        audience: exchange.audience,
         client_id: exchange.clientId,
         client_secret: exchange.clientSecret,
       }),
     });
     const body = await res.json();
     if (!res.ok || !body.access_token) {
-      throw new Error(`token exchange failed: ${body.error ?? res.status}`);
+      throw new Error(`token exchange failed: ${body.error_description ?? body.error ?? res.status}`);
     }
     const now = Date.now();
     for (const [k, entry] of exchangeCache) if (entry.expiresAt <= now) exchangeCache.delete(k);
-    exchangeCache.set(key, { token: body.access_token, expiresAt: now + (body.expires_in - 60) * 1000 });
+    exchangeCache.set(key, { token: body.access_token, expiresAt: now + ((body.expires_in ?? 60) - 60) * 1000 });
     return body.access_token;
+  }
+
+  function exchangeToken(subjectToken) {
+    return cachedExchange("api", subjectToken, {
+      grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+      requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
+      audience: exchange.audience,
+    });
+  }
+
+  function exchangeForGithub(subjectToken) {
+    return cachedExchange("github", subjectToken, {
+      grant_type: "urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token",
+      requested_token_type: "http://auth0.com/oauth/token-type/federated-connection-access-token",
+      connection: github.connection,
+    });
   }
 
   function buildServer(auth) {
@@ -144,6 +162,43 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
       },
     );
 
+    if (github) {
+      server.registerTool(
+        "github_profile",
+        {
+          description: `Return the GitHub login linked to this user through Token Vault. Requires the ${GITHUB_SCOPE} scope.`,
+          inputSchema: {},
+        },
+        async () => {
+          const fail = (text) => ({ isError: true, content: [{ type: "text", text }] });
+          if (!auth.scopes.includes(GITHUB_SCOPE)) {
+            return fail(`insufficient_scope: requires ${GITHUB_SCOPE}`);
+          }
+          if (!exchange) {
+            return fail("token exchange is not configured");
+          }
+          // The GitHub token is used here and never returned to the client.
+          let githubToken;
+          try {
+            githubToken = await exchangeForGithub(auth.token);
+          } catch (err) {
+            return fail(err.message);
+          }
+          let res;
+          try {
+            res = await fetch(`${github.apiUrl}/user`, {
+              headers: { authorization: `Bearer ${githubToken}`, accept: "application/vnd.github+json" },
+            });
+          } catch {
+            return fail("GitHub API is unreachable");
+          }
+          if (!res.ok) return fail(`GitHub API returned ${res.status}`);
+          const user = await res.json();
+          return { content: [{ type: "text", text: JSON.stringify({ github_login: user.login }) }] };
+        },
+      );
+    }
+
     return server;
   }
 
@@ -191,7 +246,7 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
         JSON.stringify({
           resource,
           authorization_servers: [issuer],
-          scopes_supported: [REPORT_SCOPE],
+          scopes_supported: [REPORT_SCOPE, GITHUB_SCOPE],
           bearer_methods_supported: ["header"],
         }),
       );
@@ -222,6 +277,18 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
       res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: err.code, message: err.message }, id: null }));
       return;
     }
+    // The MCP spec says a token without the scope for the request gets HTTP 403, not only a tool error.
+    const requestedTool = body?.method === "tools/call" ? body.params?.name : undefined;
+    const requiredScope = TOOL_SCOPES[requestedTool];
+    if (requiredScope && !result.auth.scopes.includes(requiredScope)) {
+      res.writeHead(403, {
+        "content-type": "application/json",
+        "www-authenticate": `Bearer error="insufficient_scope", scope="${requiredScope}", resource_metadata="${metadataUrl}"`,
+      });
+      res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32001, message: `insufficient_scope: requires ${requiredScope}` }, id: body.id ?? null }));
+      return;
+    }
+
     const server = buildServer(result.auth);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on("close", () => {
@@ -254,7 +321,8 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
           audience: process.env.REPORTS_AUDIENCE,
         }
       : undefined;
-  createMcpApp({ issuer, resource, port, reports, exchange }).listen(port, () => {
+  const github = exchange ? { connection: "github", apiUrl: process.env.GITHUB_API_URL ?? "https://api.github.com" } : undefined;
+  createMcpApp({ issuer, resource, port, reports, exchange, github }).listen(port, () => {
     console.log(`MCP server on http://localhost:${port}/mcp, issuer ${issuer}, resource ${resource}`);
   });
 }

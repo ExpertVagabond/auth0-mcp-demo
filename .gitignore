@@ -1,1 +1,11 @@
 node_modules/
+
+# Credentials and tokens belong in ~/.config/auth0-mcp-demo, never in the repo.
+.env
+.env.*
+*.secret
+*-token*.txt
+*-client*.json
+*-oauth*.json
+*-app*.json
+obo-*.json

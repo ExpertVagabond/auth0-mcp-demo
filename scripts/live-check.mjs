@@ -24,4 +24,10 @@ console.log("whoami:", who.content[0].text);
 const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
 console.log("read_report:", report.isError ? `ERROR ${report.content[0].text}` : report.content[0].text);
 
+// Only present when the token carries read:github and the user has a linked GitHub account.
+if (tools.some((t) => t.name === "github_profile")) {
+  const gh = await client.callTool({ name: "github_profile", arguments: {} });
+  console.log("github_profile:", gh.isError ? `ERROR ${gh.content[0].text}` : gh.content[0].text);
+}
+
 await client.close();

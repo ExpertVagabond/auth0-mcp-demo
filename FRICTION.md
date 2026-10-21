@@ -10,8 +10,8 @@ There is no Auth0 tenant on this machine, so the server can't be checked against
 Searching for the free developer tier turned up conflicting figures: a monthly-active-user cap of 100 on Okta Developer Edition, a 25,000 MAU claim from a third-party tracker, and a deactivation notice on Developer Edition orgs. Auth0's entity-limit page lists free-tenant object counts but not the MAU cap.
 **Would help:** one page that states the free tier, its MAU cap, and whether Developer Edition signups are open.
 
-## 3. The challenge format for a 401 has to be assembled by hand (provisional)
-The MCP authorization flow depends on the `WWW-Authenticate` header carrying `resource_metadata`, which points the client at the protected-resource metadata. I built that header from the spec text. The SDKs in the reference examples do this for you, but a developer writing a server in a plain HTTP framework has nothing to copy.
+## 3. The challenge format for a 401 has to be assembled by hand (spec-checked; no Auth0 example)
+The MCP authorization flow depends on the `WWW-Authenticate` header carrying `resource_metadata`, which points the client at the protected-resource metadata. The MCP spec requires that header, and the server's 401 and 403 challenges match it. The Auth0 pages don't show one, though, so a developer writing a server in a plain HTTP framework has nothing to copy from Auth0.
 **Would help:** a copy-paste challenge example in the MCP auth docs for a plain Node HTTP server.
 
 ## 4. `resource` and `audience` are easy to mix up (confirmed live, 2026-10-21)
@@ -48,4 +48,4 @@ A client grant with subject type client doesn't authorize a user login to the My
 **Would help:** say both grant types exist, and which one the login needs.
 
 ## Next step for this log
-The on-behalf-of flow and browser login are now verified live (see README). Items 6 to 9 come from that run. Items 4 and 5 are confirmed by live tokens. Item 3 is still provisional: the 401 challenge format is built from the spec, not from an Auth0 example.
+The on-behalf-of flow and browser login are now verified live (see README). Items 6 to 9 come from that run. Items 4 and 5 are confirmed by live tokens. Item 3 is checked against the MCP spec, though not against an Auth0 example.

@@ -14,6 +14,8 @@ import { createReportsApi } from "../reports-api.mjs";
 const ISSUER_PORT = 4101;
 const MCP_PORT = 4102;
 const REPORTS_PORT = 4103;
+const GITHUB_STUB_PORT = 4104;
+const FEDERATED_GRANT = "urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token";
 const ISSUER = `http://localhost:${ISSUER_PORT}/`;
 const RESOURCE = "https://reports.demo.test/";
 const REPORTS_AUD = "https://reports-backend.demo.test/";
@@ -27,6 +29,7 @@ let publicJwk;
 let issuerServer;
 let mcpServer;
 let reportsServer;
+let githubStub;
 let exchangeCount = 0;
 
 before(async () => {
@@ -57,6 +60,14 @@ before(async () => {
   reportsServer = createReportsApi({ issuer: ISSUER, audience: REPORTS_AUD });
   await new Promise((r) => reportsServer.listen(REPORTS_PORT, r));
 
+  // Stands in for api.github.com: accepts only tokens that Token Vault issued in these tests.
+  githubStub = createServer((req, res) => {
+    const ok = req.url === "/user" && (req.headers.authorization ?? "").startsWith("Bearer gh-token-");
+    res.writeHead(ok ? 200 : 401, { "content-type": "application/json" });
+    res.end(JSON.stringify(ok ? { login: "test-user" } : { message: "Bad credentials" }));
+  });
+  await new Promise((r) => githubStub.listen(GITHUB_STUB_PORT, r));
+
   mcpServer = createMcpApp({
     issuer: ISSUER,
     resource: RESOURCE,
@@ -68,13 +79,14 @@ before(async () => {
       clientSecret: OBO_CLIENT_SECRET,
       audience: REPORTS_AUD,
     },
+    github: { connection: "github", apiUrl: `http://localhost:${GITHUB_STUB_PORT}` },
   });
   await new Promise((r) => mcpServer.listen(MCP_PORT, r));
 });
 
 after(async () => {
   // fetch keeps sockets alive, so close them first or server.close() never calls back.
-  for (const server of [mcpServer, reportsServer, issuerServer]) {
+  for (const server of [mcpServer, reportsServer, githubStub, issuerServer]) {
     server.closeAllConnections();
     await new Promise((r) => server.close(r));
   }
@@ -84,6 +96,9 @@ after(async () => {
 // the subject token must be valid for the MCP resource, the client must authenticate,
 // and the result is a token for the requested audience with the user's permissions and no scope claim.
 async function mockTokenEndpoint(form) {
+  if (form.get("grant_type") === FEDERATED_GRANT) {
+    return mockTokenVaultExchange(form);
+  }
   if (form.get("grant_type") !== "urn:ietf:params:oauth:grant-type:token-exchange") {
     return { status: 400, body: { error: "unsupported_grant_type" } };
   }
@@ -114,6 +129,30 @@ async function mockTokenEndpoint(form) {
     .setExpirationTime("1h")
     .sign(privateKey);
   return { status: 200, body: { access_token, token_type: "Bearer", expires_in: 3600 } };
+}
+
+// Token Vault: returns the GitHub token stored for the user. A user with no linked GitHub account gets an error,
+// as Auth0 returns it.
+async function mockTokenVaultExchange(form) {
+  if (form.get("client_id") !== OBO_CLIENT_ID || form.get("client_secret") !== OBO_CLIENT_SECRET) {
+    return { status: 401, body: { error: "invalid_client" } };
+  }
+  let subject;
+  try {
+    ({ payload: subject } = await jwtVerify(form.get("subject_token"), publicKey, { issuer: ISSUER, audience: RESOURCE }));
+  } catch {
+    return { status: 400, body: { error: "invalid_request", error_description: "subject token is not valid for this resource" } };
+  }
+  if (form.get("connection") !== "github") {
+    return { status: 400, body: { error: "invalid_request", error_description: "unknown connection" } };
+  }
+  if (subject.sub === "auth0|no-github") {
+    return {
+      status: 400,
+      body: { error: "federated_connection_refresh_token_not_found", error_description: "There is no connected account for that user and connection." },
+    };
+  }
+  return { status: 200, body: { access_token: `gh-token-${subject.sub}`, token_type: "Bearer", expires_in: 28791 } };
 }
 
 async function sign({ scope = "", permissions, aud = RESOURCE, iss = ISSUER, sub = "auth0|demo-user", expiresIn = "5m" } = {}) {
@@ -150,7 +189,7 @@ test("protected-resource metadata names the resource and issuer", async () => {
   const body = await res.json();
   assert.equal(body.resource, RESOURCE);
   assert.deepEqual(body.authorization_servers, [ISSUER]);
-  assert.deepEqual(body.scopes_supported, ["read:reports"]);
+  assert.deepEqual(body.scopes_supported, ["read:reports", "read:github"]);
 });
 
 test("no token: 401 with a resource_metadata challenge", async () => {
@@ -182,16 +221,15 @@ test("expired token is rejected", async () => {
 test("valid token without read:reports: whoami works, read_report is refused", async () => {
   const client = await connect(await sign({ scope: "openid profile" }));
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["read_report", "whoami"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), ["github_profile", "read_report", "whoami"]);
 
   const who = await client.callTool({ name: "whoami", arguments: {} });
   const parsed = JSON.parse(who.content[0].text);
   assert.equal(parsed.sub, "auth0|demo-user");
   assert.deepEqual(parsed.scopes, ["openid", "profile"]);
 
-  const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
-  assert.equal(report.isError, true);
-  assert.match(report.content[0].text, /insufficient_scope: requires read:reports/);
+  // The SDK surfaces the HTTP 403 as a thrown error; the status and challenge are checked in their own test.
+  await assert.rejects(client.callTool({ name: "read_report", arguments: { week: "2026-W43" } }));
   await client.close();
 });
 
@@ -212,16 +250,25 @@ test("permission must be in both scope and permissions claims when both are pres
 
   // User holds it but the client was not granted it: refused before any exchange.
   const userOnly = await connect(await sign({ scope: "openid", permissions: ["read:reports"] }));
-  const refused = await userOnly.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
-  assert.equal(refused.isError, true);
+  await assert.rejects(userOnly.callTool({ name: "read_report", arguments: { week: "2026-W43" } }));
   await userOnly.close();
 });
 
 test("permissions claim without a scope claim grants nothing (fails closed)", async () => {
   const client = await connect(await sign({ permissions: ["read:reports"] }));
-  const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
-  assert.equal(report.isError, true);
+  await assert.rejects(client.callTool({ name: "read_report", arguments: { week: "2026-W43" } }));
   await client.close();
+});
+
+test("tool call without read:reports gets HTTP 403 with an insufficient_scope challenge", async () => {
+  const token = await sign({ scope: "openid" });
+  const res = await fetch(MCP_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 7, method: "tools/call", params: { name: "read_report", arguments: { week: "2026-W43" } } }),
+  });
+  assert.equal(res.status, 403);
+  assert.match(res.headers.get("www-authenticate"), /error="insufficient_scope", scope="read:reports", resource_metadata=/);
 });
 
 test("malformed JSON with a valid token: 400 parse error, server keeps running", async () => {
@@ -306,5 +353,33 @@ test("read_report rejects a week that is not in ISO format", async () => {
   // Schema validation fails before the handler runs. The SDK may report that as an error result or a thrown error.
   const result = await client.callTool({ name: "read_report", arguments: { week: "../admin" } }).catch((err) => ({ isError: true, err }));
   assert.equal(result.isError, true);
+  await client.close();
+});
+
+test("github_profile without read:github gets HTTP 403 with a challenge naming that scope", async () => {
+  const token = await sign({ scope: "read:reports" });
+  const res = await fetch(MCP_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 8, method: "tools/call", params: { name: "github_profile", arguments: {} } }),
+  });
+  assert.equal(res.status, 403);
+  assert.match(res.headers.get("www-authenticate"), /scope="read:github"/);
+});
+
+test("github_profile returns the linked GitHub login through Token Vault and never the token", async () => {
+  const client = await connect(await sign({ scope: "read:github", permissions: ["read:github"], sub: "github|216808416" }));
+  const result = await client.callTool({ name: "github_profile", arguments: {} });
+  assert.notEqual(result.isError, true);
+  assert.deepEqual(JSON.parse(result.content[0].text), { github_login: "test-user" });
+  assert.doesNotMatch(result.content[0].text, /gh-token-/);
+  await client.close();
+});
+
+test("github_profile reports a user with no linked GitHub account as a tool error", async () => {
+  const client = await connect(await sign({ scope: "read:github", permissions: ["read:github"], sub: "auth0|no-github" }));
+  const result = await client.callTool({ name: "github_profile", arguments: {} });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /token exchange failed: There is no connected account/);
   await client.close();
 });
