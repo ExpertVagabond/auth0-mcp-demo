@@ -2,7 +2,10 @@
 
 An MCP server that requires an OAuth 2.0 access token. Tokens are validated locally against the authorization server's JWKS. The server checks the issuer, the audience (the MCP resource identifier), and expiry. Tools can require a scope.
 
-Status: **verified against a local issuer** (`npm test`, 7 tests). **Not yet run against a live Auth0 tenant.**
+Status:
+- **Verified against a local issuer** (`npm test`, 15 tests).
+- **Verified against a live Auth0 tenant** on 2026-10-21, with a machine-to-machine token from `dev-pimpusbqkepr5gdl.us.auth0.com`. `scripts/live-check.mjs` ran `whoami` and `read_report` through the real server and reports API.
+- **Not yet verified:** a user login through the authorization-code flow. The live check used a client-credentials token.
 
 ## Run the tests
 
