@@ -18,8 +18,8 @@ The MCP authorization flow depends on the `WWW-Authenticate` header carrying `re
 The MCP spec uses a `resource` identifier. OAuth APIs have traditionally used `audience`. The code has to check the audience claim against the resource identifier. Auth0's changelog says it accepts `resource`, but I haven't confirmed that against a live token.
 **Would help:** one example token showing the `aud` claim produced from a `resource` request.
 
-## 5. Scope names in the token depend on a setting (provisional)
-The server reads scopes from the `scope` claim. If the tenant doesn't put scopes there, the scope check fails silently: the tool returns `insufficient_scope` and the developer has no clue why. The fix is a configuration setting, not a code change.
+## 5. Auth0 puts permissions in a different claim than my first build assumed (confirmed from docs, fixed in code)
+My first server read only the `scope` claim. The Auth0 quickstart says permissions come in a `permissions` claim when the resource server uses the `rfc9068_profile_authz` token dialect. A developer following the OAuth shape would get `insufficient_scope` with no clue why. The server now reads both claims. Still to confirm against a live token.
 **Would help:** a note in the Auth0 MCP quickstart that scopes must appear in the access token, plus a sample decoded token.
 
 ## Next step for this log

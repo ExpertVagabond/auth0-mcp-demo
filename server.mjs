@@ -32,10 +32,16 @@ export function createMcpApp({ issuer, resource, port, publicBase }) {
         issuer,
         audience: resource,
       });
+      // Auth0 puts granted permissions in `permissions` (RBAC, rfc9068 profile).
+      // The standard OAuth `scope` string is also accepted.
+      const scopes = new Set(typeof payload.scope === "string" ? payload.scope.split(" ") : []);
+      if (Array.isArray(payload.permissions)) {
+        for (const permission of payload.permissions) scopes.add(permission);
+      }
       return {
         auth: {
           sub: payload.sub,
-          scopes: typeof payload.scope === "string" ? payload.scope.split(" ") : [],
+          scopes: [...scopes],
           audience: payload.aud,
         },
       };

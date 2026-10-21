@@ -44,8 +44,8 @@ after(async () => {
   await new Promise((r) => issuerServer.close(r));
 });
 
-async function sign({ scope = "", aud = RESOURCE, iss = ISSUER, sub = "auth0|demo-user", expiresIn = "5m" } = {}) {
-  return new SignJWT({ scope })
+async function sign({ scope = "", permissions, aud = RESOURCE, iss = ISSUER, sub = "auth0|demo-user", expiresIn = "5m" } = {}) {
+  return new SignJWT(permissions ? { scope, permissions } : { scope })
     .setProtectedHeader({ alg: "RS256", kid: "test-key" })
     .setIssuer(iss)
     .setAudience(aud)
@@ -125,6 +125,14 @@ test("valid token without read:reports: whoami works, read_report is refused", a
 
 test("valid token with read:reports: read_report returns the report", async () => {
   const client = await connect(await sign({ scope: "openid read:reports" }));
+  const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
+  assert.notEqual(report.isError, true);
+  assert.match(report.content[0].text, /Report for 2026-W43/);
+  await client.close();
+});
+
+test("permission in the Auth0 permissions claim (no scope string) grants the tool", async () => {
+  const client = await connect(await sign({ permissions: ["read:reports"] }));
   const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
   assert.notEqual(report.isError, true);
   assert.match(report.content[0].text, /Report for 2026-W43/);
