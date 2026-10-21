@@ -2,10 +2,11 @@
 
 An MCP server that requires an OAuth 2.0 access token. Tokens are validated locally against the authorization server's JWKS. The server checks the issuer, the audience (the MCP resource identifier), and expiry. Tools can require a scope.
 
-Status:
-- **Verified against a local issuer** (`npm test`, 15 tests).
-- **Verified against a live Auth0 tenant** on 2026-10-21, with a machine-to-machine token from `dev-pimpusbqkepr5gdl.us.auth0.com`. `scripts/live-check.mjs` ran `whoami` and `read_report` through the real server and reports API.
-- **Not yet verified:** a user login through the authorization-code flow. The live check used a client-credentials token.
+Status (tenant `dev-pimpusbqkepr5gdl.us.auth0.com`, checked 2026-10-21):
+- **Local:** `npm test`, 16 tests, all passing. They use a mock issuer that signs RS256 tokens and runs token exchange.
+- **Live, machine-to-machine token:** `scripts/live-check.mjs` called `whoami` and `read_report`.
+- **Live, browser login:** `scripts/login-check.mjs` ran the authorization-code flow with PKCE. The user signed in with Google and got the Report Reader role. `live-check.mjs` then passed with that user's token.
+- **Live, on-behalf-of token exchange:** the MCP server exchanges the user's token for one whose audience is the reports API. The reports API accepts the exchanged token (200) and refuses the user's own MCP token (401).
 
 ## Run the tests
 
@@ -40,18 +41,24 @@ In Auth0 you need an API whose identifier equals `MCP_RESOURCE`, with a `read:re
 
 ## Reports API
 
-`reports-api.mjs` is a separate backend. It serves `GET /reports/{week}` and needs the header `x-service-key`.
+`reports-api.mjs` is a separate backend. It serves `GET /reports/{week}`. Callers send `Authorization: Bearer <token>`, and the API accepts only tokens that:
+- are signed by the issuer and have audience `REPORTS_AUDIENCE` (`https://reports-backend.demo.test/`), and
+- carry `read:reports` in the `permissions` claim.
 
-- Only the MCP server calls it. The user's access token is never forwarded. The MCP spec forbids passing a token through to another API, and the reports API would reject it anyway, because the token's audience is the MCP server.
-- `REPORTS_API_KEY` is a local secret shared between the two processes. Generate it with `openssl rand -hex 32`. It is not an Auth0 credential and it isn't stored in the repo.
-- The MCP server enforces the user's `read:reports` scope before it calls the API. The reports API trusts the service key alone.
-- The real delegation step, where the MCP server exchanges the user's token for a token to the reports API, needs an Auth0 client secret from your tenant. That's the next step after the live check.
+The user's own token is never forwarded. The MCP spec forbids token passthrough. Instead, the MCP server exchanges the user's token (RFC 8693, Auth0 on-behalf-of) for one whose audience is the reports API. The exchange result is cached until shortly before it expires.
+
+Auth0 setup for the exchange:
+- A `resource_server` application whose `resource_server_identifier` is the MCP resource (`https://reports.demo.test/`), with on-behalf-of token exchange enabled. Its client secret is the `TOKEN_EXCHANGE_CLIENT_SECRET`. Keep it out of the repo.
+- A client grant from that application to the reports API, for `read:reports`.
+- The reports API has "Allow Skipping User Consent for Verifiable First-Party Clients" enabled, because the exchange client is first-party.
+
+Exchanged tokens carry `permissions` but no `scope` claim.
 
 Run it:
 
-    REPORTS_API_KEY=$(openssl rand -hex 32) PORT=3100 node reports-api.mjs
+    AUTH0_ISSUER=https://YOUR-TENANT.us.auth0.com/ REPORTS_AUDIENCE=https://reports-backend.demo.test/ PORT=3100 node reports-api.mjs
 
-Then start the MCP server with `REPORTS_API_URL=http://localhost:3100` and the same `REPORTS_API_KEY`.
+Then start the MCP server with `REPORTS_API_URL=http://localhost:3100`, `REPORTS_AUDIENCE=https://reports-backend.demo.test/`, and `TOKEN_EXCHANGE_CLIENT_ID` and `TOKEN_EXCHANGE_CLIENT_SECRET` set from the exchange application.
 
 ## Files
 

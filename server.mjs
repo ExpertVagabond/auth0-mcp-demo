@@ -3,6 +3,7 @@
 
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
+import { createHash } from "node:crypto";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -18,7 +19,7 @@ function httpError(status, code, message) {
   return err;
 }
 
-export function createMcpApp({ issuer, resource, port, publicBase, reports }) {
+export function createMcpApp({ issuer, resource, port, publicBase, reports, exchange }) {
   // issuer must end with "/" to match Auth0's iss claim exactly.
   const jwks = createRemoteJWKSet(new URL(".well-known/jwks.json", issuer));
   const base = publicBase ?? `http://localhost:${port}`;
@@ -44,11 +45,44 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports }) {
           sub: payload.sub,
           scopes,
           audience: payload.aud,
+          token: header.slice(7),
         },
       };
     } catch (err) {
       return { error: "invalid_token", detail: err.code ?? err.message };
     }
+  }
+
+  // Trade the user's token for one whose audience is the reports API (RFC 8693, Auth0 on-behalf-of).
+  // Results are cached per subject token until shortly before they expire.
+  const exchangeCache = new Map();
+
+  async function exchangeToken(subjectToken) {
+    const key = createHash("sha256").update(subjectToken).digest("hex");
+    const cached = exchangeCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.token;
+
+    const res = await fetch(exchange.tokenUrl, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+        subject_token: subjectToken,
+        subject_token_type: "urn:ietf:params:oauth:token-type:access_token",
+        requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
+        audience: exchange.audience,
+        client_id: exchange.clientId,
+        client_secret: exchange.clientSecret,
+      }),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.access_token) {
+      throw new Error(`token exchange failed: ${body.error ?? res.status}`);
+    }
+    const now = Date.now();
+    for (const [k, entry] of exchangeCache) if (entry.expiresAt <= now) exchangeCache.delete(k);
+    exchangeCache.set(key, { token: body.access_token, expiresAt: now + (body.expires_in - 60) * 1000 });
+    return body.access_token;
   }
 
   function buildServer(auth) {
@@ -76,20 +110,27 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports }) {
         if (!auth.scopes.includes(REPORT_SCOPE)) {
           return fail(`insufficient_scope: requires ${REPORT_SCOPE}`);
         }
-        if (!reports) {
-          return fail("reports API is not configured");
+        if (!reports || !exchange) {
+          return fail("reports API or token exchange is not configured");
         }
-        // The user's token is not forwarded (the MCP spec forbids token passthrough).
-        // The MCP server calls the reports API with its own service key.
+        // The user's token is never forwarded as-is (the MCP spec forbids token passthrough).
+        // It is exchanged for a token whose audience is the reports API.
+        let apiToken;
+        try {
+          apiToken = await exchangeToken(auth.token);
+        } catch (err) {
+          return fail(err.message);
+        }
         let res;
         try {
           res = await fetch(`${reports.url}/reports/${week}`, {
-            headers: { "x-service-key": reports.key },
+            headers: { authorization: `Bearer ${apiToken}` },
           });
         } catch {
           return fail("reports API is unreachable");
         }
         if (res.status === 404) return fail(`no report for ${week}`);
+        if (res.status === 401 || res.status === 403) return fail(`reports API refused the token: ${res.status}`);
         if (!res.ok) return fail(`reports API returned ${res.status}`);
         const report = await res.json();
         return {
@@ -203,11 +244,17 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.error("Set AUTH0_ISSUER (e.g. https://YOUR-TENANT.us.auth0.com/) and MCP_RESOURCE (API identifier).");
     process.exit(1);
   }
-  const reports =
-    process.env.REPORTS_API_URL && process.env.REPORTS_API_KEY
-      ? { url: process.env.REPORTS_API_URL, key: process.env.REPORTS_API_KEY }
+  const reports = process.env.REPORTS_API_URL ? { url: process.env.REPORTS_API_URL } : undefined;
+  const exchange =
+    process.env.TOKEN_EXCHANGE_CLIENT_ID && process.env.TOKEN_EXCHANGE_CLIENT_SECRET && process.env.REPORTS_AUDIENCE
+      ? {
+          tokenUrl: new URL("oauth/token", issuer).href,
+          clientId: process.env.TOKEN_EXCHANGE_CLIENT_ID,
+          clientSecret: process.env.TOKEN_EXCHANGE_CLIENT_SECRET,
+          audience: process.env.REPORTS_AUDIENCE,
+        }
       : undefined;
-  createMcpApp({ issuer, resource, port, reports }).listen(port, () => {
+  createMcpApp({ issuer, resource, port, reports, exchange }).listen(port, () => {
     console.log(`MCP server on http://localhost:${port}/mcp, issuer ${issuer}, resource ${resource}`);
   });
 }

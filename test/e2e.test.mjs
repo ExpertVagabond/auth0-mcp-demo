@@ -1,10 +1,11 @@
-// End-to-end: a mock OAuth issuer signs RS256 access tokens, the MCP server validates them,
+// End-to-end: a mock OAuth issuer signs RS256 access tokens and runs token exchange, the MCP server
+// validates the user's token and exchanges it, the reports API validates the exchanged token,
 // and a real MCP client calls the tools. Run with: npm test
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { generateKeyPair, exportJWK, SignJWT } from "jose";
+import { generateKeyPair, exportJWK, SignJWT, jwtVerify } from "jose";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createMcpApp } from "../server.mjs";
@@ -15,38 +16,58 @@ const MCP_PORT = 4102;
 const REPORTS_PORT = 4103;
 const ISSUER = `http://localhost:${ISSUER_PORT}/`;
 const RESOURCE = "https://reports.demo.test/";
+const REPORTS_AUD = "https://reports-backend.demo.test/";
 const MCP_URL = `http://localhost:${MCP_PORT}/mcp`;
-const SERVICE_KEY = "test-service-key";
+const OBO_CLIENT_ID = "obo-test-client";
+const OBO_CLIENT_SECRET = "obo-test-secret";
 
 let privateKey;
+let publicKey;
 let publicJwk;
 let issuerServer;
 let mcpServer;
 let reportsServer;
+let exchangeCount = 0;
 
 before(async () => {
   const pair = await generateKeyPair("RS256");
   privateKey = pair.privateKey;
+  publicKey = pair.publicKey;
   publicJwk = { ...(await exportJWK(pair.publicKey)), kid: "test-key", alg: "RS256", use: "sig" };
 
-  issuerServer = createServer((req, res) => {
+  issuerServer = createServer(async (req, res) => {
     if (req.url === "/.well-known/jwks.json") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ keys: [publicJwk] }));
-    } else {
-      res.writeHead(404).end();
+      return;
     }
+    if (req.url === "/oauth/token" && req.method === "POST") {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      const form = new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
+      const { status, body } = await mockTokenEndpoint(form);
+      res.writeHead(status, { "content-type": "application/json" });
+      res.end(JSON.stringify(body));
+      return;
+    }
+    res.writeHead(404).end();
   });
   await new Promise((r) => issuerServer.listen(ISSUER_PORT, r));
 
-  reportsServer = createReportsApi({ apiKey: SERVICE_KEY });
+  reportsServer = createReportsApi({ issuer: ISSUER, audience: REPORTS_AUD });
   await new Promise((r) => reportsServer.listen(REPORTS_PORT, r));
 
   mcpServer = createMcpApp({
     issuer: ISSUER,
     resource: RESOURCE,
     port: MCP_PORT,
-    reports: { url: `http://localhost:${REPORTS_PORT}`, key: SERVICE_KEY },
+    reports: { url: `http://localhost:${REPORTS_PORT}` },
+    exchange: {
+      tokenUrl: new URL("oauth/token", ISSUER).href,
+      clientId: OBO_CLIENT_ID,
+      clientSecret: OBO_CLIENT_SECRET,
+      audience: REPORTS_AUD,
+    },
   });
   await new Promise((r) => mcpServer.listen(MCP_PORT, r));
 });
@@ -58,6 +79,42 @@ after(async () => {
     await new Promise((r) => server.close(r));
   }
 });
+
+// Mirrors Auth0's RFC 8693 on-behalf-of exchange closely enough for these tests:
+// the subject token must be valid for the MCP resource, the client must authenticate,
+// and the result is a token for the requested audience with the user's permissions and no scope claim.
+async function mockTokenEndpoint(form) {
+  if (form.get("grant_type") !== "urn:ietf:params:oauth:grant-type:token-exchange") {
+    return { status: 400, body: { error: "unsupported_grant_type" } };
+  }
+  if (form.get("client_id") !== OBO_CLIENT_ID || form.get("client_secret") !== OBO_CLIENT_SECRET) {
+    return { status: 401, body: { error: "invalid_client" } };
+  }
+  let subject;
+  try {
+    ({ payload: subject } = await jwtVerify(form.get("subject_token"), publicKey, { issuer: ISSUER, audience: RESOURCE }));
+  } catch {
+    return { status: 400, body: { error: "invalid_request", error_description: "subject token is not valid for this resource" } };
+  }
+  if (form.get("audience") !== REPORTS_AUD) {
+    return { status: 400, body: { error: "invalid_request", error_description: "unknown audience" } };
+  }
+  exchangeCount += 1;
+  const permissions = Array.isArray(subject.permissions)
+    ? subject.permissions
+    : typeof subject.scope === "string"
+      ? subject.scope.split(" ")
+      : [];
+  const access_token = await new SignJWT({ permissions })
+    .setProtectedHeader({ alg: "RS256", kid: "test-key" })
+    .setIssuer(ISSUER)
+    .setAudience(REPORTS_AUD)
+    .setSubject(subject.sub)
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(privateKey);
+  return { status: 200, body: { access_token, token_type: "Bearer", expires_in: 3600 } };
+}
 
 async function sign({ scope = "", permissions, aud = RESOURCE, iss = ISSUER, sub = "auth0|demo-user", expiresIn = "5m" } = {}) {
   return new SignJWT(permissions ? { scope, permissions } : { scope })
@@ -138,7 +195,7 @@ test("valid token without read:reports: whoami works, read_report is refused", a
   await client.close();
 });
 
-test("valid token with read:reports: read_report returns the report", async () => {
+test("valid token with read:reports: read_report returns the report through token exchange", async () => {
   const client = await connect(await sign({ scope: "openid read:reports" }));
   const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
   assert.notEqual(report.isError, true);
@@ -153,7 +210,7 @@ test("permission must be in both scope and permissions claims when both are pres
   assert.notEqual(ok.isError, true);
   await both.close();
 
-  // User holds it but the client was not granted it: refused.
+  // User holds it but the client was not granted it: refused before any exchange.
   const userOnly = await connect(await sign({ scope: "openid", permissions: ["read:reports"] }));
   const refused = await userOnly.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
   assert.equal(refused.isError, true);
@@ -205,18 +262,34 @@ test("oversized body with a valid token: 413, server keeps running", async () =>
   await client.close();
 });
 
-test("reports API refuses a missing or wrong service key", async () => {
-  const url = `http://localhost:${REPORTS_PORT}/reports/2026-W43`;
-  assert.equal((await fetch(url)).status, 401);
-  assert.equal((await fetch(url, { headers: { "x-service-key": "wrong" } })).status, 401);
+test("read_report exchanges the user's token once and reuses the result", async () => {
+  const token = await sign({ scope: "read:reports", permissions: ["read:reports"], sub: "auth0|cache-check" });
+  const client = await connect(token);
+  const before = exchangeCount;
+  await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
+  await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
+  assert.equal(exchangeCount - before, 1);
+  await client.close();
 });
 
-test("reports API returns the week with the right key, and 404 for an unknown week", async () => {
-  const url = `http://localhost:${REPORTS_PORT}/reports`;
-  const ok = await fetch(`${url}/2026-W43`, { headers: { "x-service-key": SERVICE_KEY } });
+test("reports API refuses a missing token, a token for the wrong audience, and one without the permission", async () => {
+  const url = `http://localhost:${REPORTS_PORT}/reports/2026-W43`;
+  assert.equal((await fetch(url)).status, 401);
+
+  const wrongAud = await sign({ aud: RESOURCE, permissions: ["read:reports"] });
+  assert.equal((await fetch(url, { headers: { authorization: `Bearer ${wrongAud}` } })).status, 401);
+
+  const noPermission = await sign({ aud: REPORTS_AUD, scope: "openid" });
+  assert.equal((await fetch(url, { headers: { authorization: `Bearer ${noPermission}` } })).status, 403);
+});
+
+test("reports API returns the week for a token with the permission, and 404 for an unknown week", async () => {
+  const good = await sign({ aud: REPORTS_AUD, permissions: ["read:reports"] });
+  const headers = { authorization: `Bearer ${good}` };
+  const ok = await fetch(`http://localhost:${REPORTS_PORT}/reports/2026-W43`, { headers });
   assert.equal(ok.status, 200);
   assert.deepEqual((await ok.json()).tickets_closed, ["AUTH-103"]);
-  const missing = await fetch(`${url}/2026-W01`, { headers: { "x-service-key": SERVICE_KEY } });
+  const missing = await fetch(`http://localhost:${REPORTS_PORT}/reports/2026-W01`, { headers });
   assert.equal(missing.status, 404);
 });
 
