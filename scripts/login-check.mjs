@@ -12,6 +12,9 @@ const clientId = process.env.LOGIN_CLIENT_ID;
 const audience = process.env.MCP_RESOURCE;
 const tokenOut = process.env.TOKEN_OUT;
 const redirectUri = "http://localhost:8080/callback";
+const clientSecret = process.env.LOGIN_CLIENT_SECRET;
+// LOGIN_CONNECTION (for example "github") sends the user straight to that identity provider.
+const loginConnection = process.env.LOGIN_CONNECTION;
 
 if (!domain || !clientId || !audience || !tokenOut) {
   console.error("Set AUTH0_DOMAIN, LOGIN_CLIENT_ID, MCP_RESOURCE, TOKEN_OUT.");
@@ -31,12 +34,13 @@ authorize.search = new URLSearchParams({
   response_type: "code",
   client_id: clientId,
   redirect_uri: redirectUri,
-  scope: "openid profile email read:reports",
+  scope: process.env.LOGIN_SCOPE ?? "openid profile email read:reports",
   [targetParam]: audience,
   state,
   code_challenge: challenge,
   code_challenge_method: "S256",
 }).toString();
+if (loginConnection) authorize.searchParams.set("connection", loginConnection);
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost:8080");
@@ -60,6 +64,8 @@ const server = createServer(async (req, res) => {
         code: url.searchParams.get("code"),
         code_verifier: verifier,
         redirect_uri: redirectUri,
+        // Confidential clients (Token Vault) also authenticate with their secret.
+        ...(clientSecret ? { client_secret: clientSecret } : {}),
       }),
     });
     const t = await tokenRes.json();

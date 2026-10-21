@@ -39,5 +39,13 @@ A user token from the login flow has `scope` and `permissions`. The exchanged to
 A signed-in user has no role until one is assigned. A role assigned after login only shows up in a new token. The first token had `permissions: []`. The fix was: assign the role, then log in again. I didn't find the second login in the docs I read.
 **Would help:** a note after role assignment saying tokens must be reissued.
 
+## 10. Token Vault needs your own GitHub OAuth app; dev keys stop at the link step (confirmed live, 2026-10-21)
+Token Vault works with a GitHub connection, but linking a user's GitHub account (the connected-accounts flow) refuses Auth0's development keys with `The connect flow cannot be used with dev keys.` So the connection needs the developer's own GitHub OAuth app client ID and secret. GitHub has no API for creating OAuth apps, so this step is manual.
+**Would help:** list the dev-keys limitation next to the GitHub connection setup, and name the step that needs an OAuth app.
+
+## 11. Account linking needs a user-subject grant on the My Account API (confirmed live)
+A client grant with subject type client doesn't authorize a user login to the My Account API. The error says the client isn't authorized for the resource server. Creating a grant with `--subject-type user` fixed the login.
+**Would help:** say both grant types exist, and which one the login needs.
+
 ## Next step for this log
 The on-behalf-of flow and browser login are now verified live (see README). Items 6 to 9 come from that run. Items 4 and 5 are confirmed by live tokens. Item 3 is still provisional: the 401 challenge format is built from the spec, not from an Auth0 example.
