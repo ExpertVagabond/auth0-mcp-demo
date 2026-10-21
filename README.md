@@ -7,6 +7,8 @@ Status (tenant `dev-pimpusbqkepr5gdl.us.auth0.com`, checked 2026-10-21):
 - **Live, machine-to-machine token:** `scripts/live-check.mjs` called `whoami` and `read_report`.
 - **Live, browser login:** `scripts/login-check.mjs` ran the authorization-code flow with PKCE. The user signed in with Google and got the Report Reader role. `live-check.mjs` then passed with that user's token.
 - **Live, on-behalf-of token exchange:** the MCP server exchanges the user's token for one whose audience is the reports API. The reports API accepts the exchanged token (200) and refuses the user's own MCP token (401).
+- **Live, Token Vault:** a GitHub account is linked through Connected Accounts, using a GitHub OAuth app owned by the developer. `scripts/connect-github.mjs` runs the link. The stored GitHub token came back from Auth0 and worked against the GitHub API.
+- **Live, log stream:** an HTTP log stream sends tenant events to a Cloudflare Worker, `log-receiver/`. The Worker checks a bearer token and logs only event counts and types.
 
 ## Run the tests
 
