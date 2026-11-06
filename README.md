@@ -2,8 +2,9 @@
 
 An MCP server that requires an OAuth 2.0 access token. Tokens are validated locally against the authorization server's JWKS. The server checks the issuer, the audience (the MCP resource identifier), and expiry. Tools can require a scope.
 
-Status (tenant `dev-pimpusbqkepr5gdl.us.auth0.com`, checked 2026-10-21):
-- **Local:** `npm test`, 16 tests, all passing. They use a mock issuer that signs RS256 tokens and runs token exchange.
+Status:
+- **Local, rechecked 2026-11-06:** `npm test`, 22 tests, all passing. They use a mock issuer that signs RS256 tokens and runs token exchange.
+- **Live Auth0 flows, checked 2026-10-21:** the checks below ran against a development tenant. The tenant hostname and credentials are intentionally not committed.
 - **Live, machine-to-machine token:** `scripts/live-check.mjs` called `whoami` and `read_report`.
 - **Live, browser login:** `scripts/login-check.mjs` ran the authorization-code flow with PKCE. The user signed in with Google and got the Report Reader role. `live-check.mjs` then passed with that user's token.
 - **Live, on-behalf-of token exchange:** the MCP server exchanges the user's token for one whose audience is the reports API. The reports API accepts the exchanged token (200) and refuses the user's own MCP token (401).
@@ -70,3 +71,7 @@ Then start the MCP server with `REPORTS_API_URL=http://localhost:3100`, `REPORTS
 - `reports-api.mjs`: the backend reports API.
 - `test/e2e.test.mjs`: the test suite, including the mock issuer and the reports API.
 - `FRICTION.md`, `DOCS-REVIEW.md`: developer-experience notes from building this.
+
+## Security
+
+This repository contains no tenant credentials, OAuth client secrets, access tokens, linked-account tokens, or local token files. Supply all credentials through environment variables and keep generated token files outside the repository. The identifiers ending in `.demo.test` and all credentials in the automated tests are non-production fixtures.
