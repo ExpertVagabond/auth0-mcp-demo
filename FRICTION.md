@@ -3,7 +3,7 @@
 Written while building this server. Each entry says what got in the way and what would help. Entries marked **provisional** were found against a local mock issuer, not a live Auth0 tenant. Confirm them before reporting them.
 
 ## 1. Getting an account to build against is the first step (confirmed)
-There is no Auth0 tenant on this machine, so the server can't be checked against the real service yet. The fastest path to a live check is a free tenant, and the free-tier limits were hard to confirm (see 2).
+When this entry was first written, there was no Auth0 tenant on this machine, so the server couldn't be checked against the real service. A development tenant was set up later, and the live checks run against it are listed in the README's status section. The free-tier limits were hard to confirm (see 2).
 **Would help:** a sandbox tenant that doesn't need a credit card, or a published local dev issuer for MCP auth.
 
 ## 2. Free-tier limits are unclear from the public pages (confirmed)

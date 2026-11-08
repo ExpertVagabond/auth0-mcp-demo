@@ -3,12 +3,12 @@
 Reviewed 2026-10-21 against three pages: the MCP overview, the "Authorization for Your MCP Server" quickstart, and the Auth0 blog announcement. Findings come from reading the pages, not from a live tenant. Each item says what a first-time developer would hit and what would fix it.
 
 Sources:
-- Overview: https://auth0.com/ai/docs/mcp/intro/overview.md
+- Overview: https://auth0.com/ai/docs/mcp/overview.md (the original `intro/overview.md` path redirects here; checked 2026-11-07)
 - Quickstart: https://auth0.com/ai/docs/mcp/get-started/authorization-for-your-mcp-server
 - Announcement: https://auth0.com/blog/auth0-auth-for-mcp-servers-generally-available/
 
 ## 1. The release status is inconsistent (conflict across pages)
-The announcement says Auth for MCP went generally available on May 6, 2026. A search summary of the quickstart said it was Early Access. The quickstart page itself doesn't state a status. A developer can't tell whether to rely on it.
+The announcement says Auth for MCP went generally available on May 6, 2026. A search summary of the quickstart said it was Early Access. The quickstart page itself doesn't state a status (checked 2026-11-07; the page has no "early access", "generally available", or "beta" text). A developer can't tell whether to rely on it.
 **Fix:** put the status and date on each page.
 
 ## 2. The permissions claim isn't named where it matters (confirmed, and the demo was wrong)
