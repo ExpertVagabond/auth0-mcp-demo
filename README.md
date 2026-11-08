@@ -43,6 +43,10 @@ In Auth0 you need an API whose identifier equals `MCP_RESOURCE`, with a `read:re
 
 - `whoami`: returns the token's subject and scopes. No scope required.
 - `read_report(week)`: requires `read:reports`. Without it, the tool returns an error result with `insufficient_scope`. With it, the tool fetches the week from the reports API. The week must match `YYYY-Www`.
+- `github_profile`: returns the GitHub login linked to the user through Token Vault. Requires `read:github`.
+- `github_open_prs`: lists the user's open pull requests on public repositories, through Token Vault. Requires `read:github`.
+
+The two GitHub tools are registered only when token exchange is configured: `TOKEN_EXCHANGE_CLIENT_ID`, `TOKEN_EXCHANGE_CLIENT_SECRET`, and `REPORTS_AUDIENCE` are all set.
 
 ## Reports API
 
