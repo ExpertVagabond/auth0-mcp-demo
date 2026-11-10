@@ -2,7 +2,7 @@
 
 Create everything the server needs in your tenant: two APIs, a role, a login application and a token-exchange application. About 15 minutes.
 
-The [verification log](../docs/VERIFICATION.md) records earlier Auth0 tenant runs with a saved-token client. The canonical endpoint below also passes a fresh-client OAuth flow against the local issuer. Each sub-step links to the relevant Auth0 setup docs.
+Each sub-step links to the relevant Auth0 setup docs. What has been checked against a live tenant is in the [verification log](../docs/VERIFICATION.md).
 
 ## What you'll create
 
@@ -23,7 +23,7 @@ cp .env.example .env
 
 Set `AUTH0_DOMAIN` (for example `my-tenant.us.auth0.com`) and `AUTH0_ISSUER` (the same with `https://` and a trailing slash).
 
-> **Use the same endpoint for `MCP_URL`, `MCP_RESOURCE`, and the Auth0 MCP API identifier.** The loopback example is `http://localhost:3000/mcp`. For a remote deployment, use your public HTTPS endpoint ending in `/mcp`. The reports API needs a separate identifier. A tenant already configured with the older fixture identifier can still use the saved-token flow. Set up a matching API identifier and exchange binding to test fresh-client discovery.
+> **Use the same endpoint for `MCP_URL`, `MCP_RESOURCE`, and the Auth0 MCP API identifier.** The loopback example is `http://localhost:3000/mcp`. For a remote deployment, use your public HTTPS endpoint ending in `/mcp`. The reports API needs a separate identifier.
 
 ## 2.1 Tenant settings
 

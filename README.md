@@ -55,7 +55,7 @@ The server code (`server.mjs`) and the backend (`reports-api.mjs`) are the same 
 | Command | `npm run demo` | `npm run start:api`, `npm start`, `npm run login`, `npm run check` |
 | Guide | [Step 1](guide/01-run-locally.md) | [Tenant setup](guide/02-set-up-auth0.md), [live run](guide/03-run-against-auth0.md), and [optional Token Vault](guide/04-token-vault.md) |
 
-The [verification log](docs/VERIFICATION.md) separates earlier Auth0 tenant runs from the fresh-client OAuth test against the local issuer.
+Verified against a live Auth0 development tenant. See the [verification log](docs/VERIFICATION.md).
 
 ## The six requests
 

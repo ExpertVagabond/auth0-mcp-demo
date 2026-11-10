@@ -15,7 +15,7 @@ That's all. Step 1 runs a stand-in for Auth0 on your machine and needs no accoun
 
 ### Which Auth0 plan you need
 
-Sign up at [auth0.com/signup](https://auth0.com/signup). There's no credit card and no paid plan to choose. From the [Auth0 pricing page](https://auth0.com/pricing) (checked 2026-11-10):
+Sign up at [auth0.com/signup](https://auth0.com/signup). There's no credit card and no paid plan to choose. From the [Auth0 pricing page](https://auth0.com/pricing):
 
 | | |
 |---|---|
@@ -23,7 +23,7 @@ Sign up at [auth0.com/signup](https://auth0.com/signup). There's no credit card 
 | **Free plan** | $0, up to 25,000 monthly active users, no credit card. **Auth for MCP** is listed as included, and the plan includes **Token Vault**, with a limit on connections. |
 | **Not needed here** | Custom Token Exchange (a paid feature) is a different feature from the on-behalf-of exchange this repo uses. |
 
-This repo was built and verified on a development tenant during its trial. Plans change, so check the pricing table for the features in steps 2 to 4 before you rely on them after the trial ends.
+Plans change, so check the pricing table for the features in steps 2 to 4 before you rely on them after the trial ends.
 
 ## For Token Vault (step 4, optional)
 
