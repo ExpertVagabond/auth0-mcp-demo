@@ -6,7 +6,7 @@
 - To call a backend for the user, it **exchanges** the user's token (on-behalf-of) instead of forwarding it.
 - It reaches GitHub through **Token Vault**, so the GitHub token never leaves the server.
 
-Verified against a live Auth0 tenant on 2026-10-21. The local demo and 23 tests pass as of 2026-11-10.
+Verified against a live Auth0 tenant: first on 2026-10-21, rechecked end to end on 2026-11-10. The local demo and 23 tests pass as of 2026-11-10.
 
 ---
 
@@ -100,9 +100,11 @@ sequenceDiagram
 ---
 
 <details>
-<summary><b>Verified against a live tenant (2026-10-21)</b></summary>
+<summary><b>Verified against a live tenant (2026-10-21, rechecked 2026-11-10)</b></summary>
 
 The checks below ran against a development tenant. The tenant hostname and credentials are intentionally not committed.
+
+**Recheck, 2026-11-10:** browser login (authorization code + PKCE, via GitHub) returned a token with `read:reports` and `read:github`. With it, `live-check.mjs` passed `whoami`, `read_report` through a live on-behalf-of exchange, `github_profile` and `github_open_prs` through Token Vault. The same user token sent straight to the reports API got 401. A machine-to-machine token passed `whoami`, and the exchange refused it, as it should, with `The user is not found`: on-behalf-of needs a user.
 
 - **Machine-to-machine token:** `scripts/live-check.mjs` called `whoami` and `read_report`.
 - **Browser login:** `scripts/login-check.mjs` ran the authorization-code flow with PKCE. The user signed in with Google and got the Report Reader role. `live-check.mjs` then passed with that user's token.

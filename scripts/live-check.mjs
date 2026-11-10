@@ -25,12 +25,19 @@ const report = await client.callTool({ name: "read_report", arguments: { week: "
 console.log("read_report:", report.isError ? `ERROR ${report.content[0].text}` : report.content[0].text);
 
 // Only present when the token carries read:github and the user has a linked GitHub account.
-if (tools.some((t) => t.name === "github_profile")) {
-  const gh = await client.callTool({ name: "github_profile", arguments: {} });
-  console.log("github_profile:", gh.isError ? `ERROR ${gh.content[0].text}` : gh.content[0].text);
+// A token without read:github gets HTTP 403 from the server, which the SDK throws; report it and carry on.
+async function tryTool(name, args) {
+  try {
+    const res = await client.callTool({ name, arguments: args });
+    console.log(`${name}:`, res.isError ? `ERROR ${res.content[0].text}` : res.content[0].text);
+  } catch (err) {
+    console.log(`${name}: REFUSED ${err.code ?? ""} ${String(err.message).replace(/^.*?"message":"([^"]+)".*$/, "$1")}`);
+  }
+}
 
-  const prs = await client.callTool({ name: "github_open_prs", arguments: { limit: 5 } });
-  console.log("github_open_prs:", prs.isError ? `ERROR ${prs.content[0].text}` : prs.content[0].text);
+if (tools.some((t) => t.name === "github_profile")) {
+  await tryTool("github_profile", {});
+  await tryTool("github_open_prs", { limit: 5 });
 }
 
 await client.close();
