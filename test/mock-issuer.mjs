@@ -4,9 +4,11 @@
 // A small stub stands in for api.github.com.
 
 import { createServer } from "node:http";
-import { generateKeyPair, exportJWK, SignJWT, jwtVerify } from "jose";
+import { createHash, randomUUID } from "node:crypto";
+import { decodeJwt, generateKeyPair, exportJWK, SignJWT, jwtVerify } from "jose";
 
-export const RESOURCE = "https://reports.demo.test/";
+export const LOGIN_CLIENT_ID = "fixture-login-client";
+export const LOGIN_REDIRECT = "http://localhost:8080/callback";
 export const REPORTS_AUD = "https://reports-backend.demo.test/";
 export const OBO_CLIENT_ID = "obo-test-client";
 export const OBO_CLIENT_SECRET = "obo-test-secret";
@@ -64,17 +66,30 @@ export function createGithubStub() {
 }
 
 // Returns { issuer, exchanges, sign, start(), stop() }. `issuer` is the iss claim (with trailing slash).
-// `exchanges` records each successful on-behalf-of exchange as { sub, audience }.
-export async function createMockIssuer({ port }) {
+// `exchanges` records the non-secret subject and audience of each issued reports token.
+export async function createMockIssuer({ port, resource }) {
   const issuer = `http://localhost:${port}/`;
   const { privateKey, publicKey } = await generateKeyPair("RS256");
   const publicJwk = { ...(await exportJWK(publicKey)), kid: "test-key", alg: "RS256", use: "sig" };
   const exchanges = [];
+  const codes = new Map();
 
   // Mirrors Auth0's RFC 8693 on-behalf-of exchange closely enough for these tests:
   // the subject token must be valid for the MCP resource, the client must authenticate,
   // and the result is a token for the requested audience with the user's permissions and no scope claim.
   async function mockTokenEndpoint(form) {
+    if (form.get("grant_type") === "authorization_code") {
+      const code = form.get("code");
+      const expected = codes.get(code);
+      codes.delete(code);
+      const challenge = createHash("sha256").update(form.get("code_verifier") ?? "").digest("base64url");
+      if (!expected || challenge !== expected || form.get("resource") !== resource ||
+          form.get("client_id") !== LOGIN_CLIENT_ID || form.get("redirect_uri") !== LOGIN_REDIRECT) {
+        return { status: 400, body: { error: "invalid_grant" } };
+      }
+      const access_token = await sign({ scope: "read:reports", permissions: ["read:reports"] });
+      return { status: 200, body: { access_token, token_type: "Bearer", expires_in: 300 } };
+    }
     if (form.get("grant_type") === FEDERATED_GRANT) {
       return mockTokenVaultExchange(form);
     }
@@ -86,14 +101,13 @@ export async function createMockIssuer({ port }) {
     }
     let subject;
     try {
-      ({ payload: subject } = await jwtVerify(form.get("subject_token"), publicKey, { issuer, audience: RESOURCE }));
+      ({ payload: subject } = await jwtVerify(form.get("subject_token"), publicKey, { issuer, audience: resource }));
     } catch {
       return { status: 400, body: { error: "invalid_request", error_description: "subject token is not valid for this resource" } };
     }
     if (form.get("audience") !== REPORTS_AUD) {
       return { status: 400, body: { error: "invalid_request", error_description: "unknown audience" } };
     }
-    exchanges.push({ sub: subject.sub, audience: form.get("audience") });
     const permissions = Array.isArray(subject.permissions)
       ? subject.permissions
       : typeof subject.scope === "string"
@@ -107,6 +121,8 @@ export async function createMockIssuer({ port }) {
       .setIssuedAt()
       .setExpirationTime("1h")
       .sign(privateKey);
+    const issued = decodeJwt(access_token);
+    exchanges.push({ sub: issued.sub, audience: issued.aud });
     return { status: 200, body: { access_token, token_type: "Bearer", expires_in: 3600 } };
   }
 
@@ -118,7 +134,7 @@ export async function createMockIssuer({ port }) {
     }
     let subject;
     try {
-      ({ payload: subject } = await jwtVerify(form.get("subject_token"), publicKey, { issuer, audience: RESOURCE }));
+      ({ payload: subject } = await jwtVerify(form.get("subject_token"), publicKey, { issuer, audience: resource }));
     } catch {
       return { status: 400, body: { error: "invalid_request", error_description: "subject token is not valid for this resource" } };
     }
@@ -135,6 +151,37 @@ export async function createMockIssuer({ port }) {
   }
 
   const server = createServer(async (req, res) => {
+    const url = new URL(req.url, issuer);
+    if (url.pathname === "/.well-known/oauth-authorization-server") {
+      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({
+        issuer,
+        authorization_endpoint: new URL("authorize", issuer).href,
+        token_endpoint: new URL("oauth/token", issuer).href,
+        response_types_supported: ["code"],
+        grant_types_supported: ["authorization_code"],
+        code_challenge_methods_supported: ["S256"],
+        token_endpoint_auth_methods_supported: ["none"],
+      }));
+      return;
+    }
+    if (url.pathname === "/authorize") {
+      const params = url.searchParams;
+      if (params.get("client_id") !== LOGIN_CLIENT_ID || params.get("redirect_uri") !== LOGIN_REDIRECT ||
+          params.get("resource") !== resource || params.get("response_type") !== "code" ||
+          params.get("code_challenge_method") !== "S256" || !params.get("code_challenge")) {
+        res.writeHead(400).end();
+        return;
+      }
+      // Test-only issuer. Assume the fixture user approved the request.
+      const code = randomUUID();
+      codes.set(code, params.get("code_challenge"));
+      const redirect = new URL(LOGIN_REDIRECT);
+      redirect.searchParams.set("code", code);
+      if (params.has("state")) redirect.searchParams.set("state", params.get("state"));
+      redirect.searchParams.set("iss", issuer);
+      res.writeHead(302, { location: redirect.href }).end();
+      return;
+    }
     if (req.url === "/.well-known/jwks.json") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ keys: [publicJwk] }));
@@ -152,15 +199,15 @@ export async function createMockIssuer({ port }) {
     res.writeHead(404).end();
   });
 
-  async function sign({ scope = "", permissions, aud = RESOURCE, iss = issuer, sub = "auth0|demo-user", expiresIn = "5m" } = {}) {
-    return new SignJWT(permissions ? { scope, permissions } : { scope })
+  async function sign({ scope = "", permissions, aud = resource, iss = issuer, sub = "auth0|demo-user", expiresIn = "5m" } = {}) {
+    const token = new SignJWT(permissions ? { scope, permissions } : { scope })
       .setProtectedHeader({ alg: "RS256", kid: "test-key" })
       .setIssuer(iss)
       .setAudience(aud)
-      .setSubject(sub)
-      .setIssuedAt()
-      .setExpirationTime(expiresIn)
-      .sign(privateKey);
+      .setIssuedAt();
+    if (sub !== null) token.setSubject(sub);
+    if (expiresIn !== null) token.setExpirationTime(expiresIn);
+    return token.sign(privateKey);
   }
 
   return {

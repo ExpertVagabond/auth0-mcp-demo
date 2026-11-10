@@ -11,6 +11,17 @@ One MCP server, protected by Auth0, and one story: **who can call which tool, an
 - To call a backend for the user, the server **exchanges** the user's token (on-behalf-of) instead of forwarding it.
 - It reaches GitHub through **Token Vault**, so the user's GitHub token never leaves the server.
 
+## Run it in two minutes
+
+In a fresh checkout with Node.js 22 or later:
+
+```bash
+npm ci && npm run verify
+npm run demo -- --step
+```
+
+The first command runs preflight, tests, and all six requests. The second pauses before each request so you can predict the response and then see why it happened. The local run needs no Auth0 account.
+
 ![The demo running in a terminal](docs/demo.gif)
 
 ## One demo, two ways to run it
@@ -22,14 +33,14 @@ The server code (`server.mjs`) and the backend (`reports-api.mjs`) are the same 
 | Authorization server | A stand-in on your machine that signs real RS256 tokens | Your Auth0 tenant |
 | You need | Node.js 22 and git | Plus a free Auth0 account and a browser sign-in |
 | First run | 2 minutes | About 20 minutes, mostly tenant setup |
-| Command | `npm run demo` | `npm start`, `npm run login`, `npm run check` |
-| Guide | [Step 1](guide/01-run-locally.md) | [Steps 2 and 3](guide/02-set-up-auth0.md), plus [step 4](guide/04-token-vault.md) for GitHub |
+| Command | `npm run demo` | `npm run start:api`, `npm start`, `npm run login`, `npm run check` |
+| Guide | [Step 1](guide/01-run-locally.md) | [Tenant setup](guide/02-set-up-auth0.md), [live run](guide/03-run-against-auth0.md), and [optional Token Vault](guide/04-token-vault.md) |
 
-Start local. Go live when you want to see it against Auth0. Verified live on 2026-10-21 and rechecked end to end on 2026-11-10.
+The [verification log](docs/VERIFICATION.md) separates earlier Auth0 tenant runs from the fresh-client OAuth test against the local issuer.
 
 ## The six requests
 
-The demo sends six requests. Five are refused with a named reason, and one is allowed:
+The demo groups its checks into six requests. The fourth is the allowed path:
 
 | # | Request | Result | What it proves | Live check |
 |---|---|---|---|---|
@@ -37,10 +48,25 @@ The demo sends six requests. Five are refused with a named reason, and one is al
 | 2 | A real token, issued for another API | **401** | Signed isn't enough; it must be issued for *this* server | — |
 | 3 | Valid token, missing `read:reports` | **403**, names the scope | Known user, not allowed, told exactly what's missing | — |
 | 4 | Valid token with `read:reports` | **200** after a token exchange | The backend gets its own token for the same user | ✅ `npm run check` |
-| 5 | The user's token sent straight to the backend | **401** | No token passthrough, no confused deputy | ✅ |
+| 5 | The user's token sent straight to the backend | **401** | The reports API rejects a token issued for the MCP server | ✅ |
 | 6 | Broken JSON, then a body over 1 MB | **400**, **413** | Clean errors, and the server keeps running | — |
 
-"Live check" marks what [step 3](guide/03-run-against-auth0.md) shows against a real tenant. Requests 2, 3 and 6 need forged tokens or inputs, so they run locally only. Token Vault (the GitHub tools) is live only.
+"Live check" marks what [step 3](guide/03-run-against-auth0.md) shows against a real tenant. Requests 2, 3 and 6 are included in the local walkthrough. The GitHub tools have local fixture coverage and can be exercised against Auth0 through [step 4](guide/04-token-vault.md).
+
+## Follow one report request
+
+1. **Discover where to sign in.** With no token, `/mcp` returns `401`. Follow `resource_metadata` in `WWW-Authenticate`. The metadata names the MCP endpoint and its authorization server. The client uses that endpoint as its OAuth `resource` when it requests a token.
+2. **Check audience before permission.** A correctly signed token for another API gets `401` because its `aud` targets the wrong service. A valid token for this MCP server that lacks `read:reports` gets `403`. The challenge names the missing scope so the client can request it.
+3. **Exchange the credential at the next hop.** With `read:reports`, the MCP server asks the issuer for a token for the reports API, on the user's behalf. The API validates the new token and returns the report. Send the original MCP token directly to the reports API in request 5 and it returns `401` because its audience is still the MCP server.
+
+| Token | Audience (`aud`) | How the receiving service authorizes it |
+|---|---|---|
+| User access token | MCP endpoint, such as `http://localhost:3000/mcp` | `read:reports` must be granted in `scope`. For the Auth0 RBAC tokens in this guide, it must also appear in `permissions`. |
+| On-behalf-of access token | Reports API, such as `https://reports-backend.demo.test/` | The reports API checks `permissions` for `read:reports`. The live exchanged token in this demo had no `scope` claim. |
+
+Both services require a valid signature, the expected issuer, an expiry (`exp`), and a subject (`sub`). The exchange preserves the user's subject while changing the audience. The two rows summarize the [token claims observed during the build](docs/FRICTION.md#8-exchanged-tokens-have-no-scope-claim-confirmed-live).
+
+**Try it yourself.** Before advancing from request 4 to 5, predict whether the backend will accept the original token even though it has `read:reports`. Then find the audience check in [the reports API](reports-api.mjs#L25) and the exchange call in [the MCP server](server.mjs#L120). For a third-party API such as GitHub, [Token Vault](guide/04-token-vault.md) supplies a provider token to the server and the MCP client receives only the tool result.
 
 ## Related content
 
@@ -74,7 +100,7 @@ Stuck? Run `npm run doctor`, then see [Troubleshooting](guide/troubleshooting.md
 ```bash
 git clone https://github.com/ExpertVagabond/mcp-agent-identity-auth0.git
 cd mcp-agent-identity-auth0
-npm install
+npm ci
 npm run doctor           # preflight: checks Node, dependencies and (later) your Auth0 settings
 npm run demo -- --step   # press Enter to move through the six requests
 ```
@@ -83,7 +109,7 @@ Or open it in [GitHub Codespaces](https://codespaces.new/ExpertVagabond/mcp-agen
 
 **Using a coding agent?** Point it at [AGENTS.md](AGENTS.md). It has exact commands and success criteria, and `npm run demo -- --json` gives a machine-readable result.
 
-Run the tests with `npm test` (23 tests).
+Run the tests with `npm test`. The suite includes a fresh SDK client that follows the 401 challenge, completes authorization code with PKCE against the local issuer, and calls `read_report`.
 
 ## How it works
 

@@ -2,6 +2,14 @@
 
 What has been checked against a live Auth0 development tenant, and when. The tenant hostname and credentials are intentionally not committed.
 
+## 2026-11-10: panel readiness checks against the local issuer
+
+- A fresh MCP SDK client follows the protected-resource challenge, discovers the issuer, sends the canonical resource on both OAuth requests, completes PKCE, and calls `read_report`.
+- The MCP server and reports API reject signed fixtures missing an expiry or a nonempty subject.
+- The live-check script is tested locally for successful core checks, failed exchange, and opt-in Token Vault failures.
+
+The tenant runs below used the earlier saved-token configuration. Repeat the [live guide](../guide/03-run-against-auth0.md) with the updated canonical endpoint to verify the new configuration against Auth0.
+
 ## 2026-11-10: end-to-end recheck
 
 | Check | Result |

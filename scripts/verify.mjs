@@ -9,16 +9,18 @@ const node = process.execPath;
 const run = (args) => spawnSync(node, args, { cwd: root, encoding: "utf8" });
 
 const doctor = run(["scripts/doctor.mjs"]);
-const tests = run(["--test", "test/e2e.test.mjs", "test/walkthrough.test.mjs"]);
+const tests = run(["--test", "--test-reporter=tap", "test/e2e.test.mjs", "test/walkthrough.test.mjs"]);
 const demo = run(["scripts/walkthrough.mjs", "--json"]);
 
-const count = (name) => Number(new RegExp(`ℹ ${name} (\\d+)`).exec(tests.stdout)?.[1] ?? NaN);
+const count = (name) => new RegExp(`^# ${name} (\\d+)$`, "m").exec(tests.stdout)?.[1];
+const passed = count("pass");
+const total = count("tests");
 let result = {};
 try { result = JSON.parse(demo.stdout); } catch {}
 
 const checks = [
   ["doctor", doctor.status === 0, doctor.status === 0 ? "ready" : "failed (run npm run doctor for details)"],
-  ["tests", tests.status === 0, `${count("pass")}/${count("tests")} passing`],
+  ["tests", tests.status === 0, passed && total ? `${passed}/${total} passing` : "run npm test for details"],
   ["demo", demo.status === 0 && result.ok === true, `${result.passed ?? 0}/${result.total ?? 6} requests matched`],
 ];
 for (const [name, ok, detail] of checks) console.log(`${ok ? "PASS" : "FAIL"}  ${name.padEnd(7)} ${detail}`);

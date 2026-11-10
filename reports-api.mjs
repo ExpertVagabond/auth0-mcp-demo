@@ -27,7 +27,8 @@ export function createReportsApi({ issuer, audience }) {
     if (!header.startsWith("Bearer ")) return { status: 401, error: "unauthorized" };
     let payload;
     try {
-      ({ payload } = await jwtVerify(header.slice(7), jwks, { issuer, audience }));
+      ({ payload } = await jwtVerify(header.slice(7), jwks, { issuer, audience, requiredClaims: ["exp", "sub"] }));
+      if (typeof payload.sub !== "string" || !payload.sub.trim()) return { status: 401, error: "invalid_token" };
     } catch {
       return { status: 401, error: "invalid_token" };
     }

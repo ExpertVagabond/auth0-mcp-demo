@@ -2,7 +2,7 @@
 
 Create everything the server needs in your tenant: two APIs, a role, a login application and a token-exchange application. About 15 minutes.
 
-These settings are the ones that worked against a live tenant (first on 2026-10-21, rechecked on 2026-11-10). Each sub-step links to the official Auth0 page that shows how to make the setting.
+The [verification log](../docs/VERIFICATION.md) records earlier Auth0 tenant runs with a saved-token client. The canonical endpoint below also passes a fresh-client OAuth flow against the local issuer. Each sub-step links to the relevant Auth0 setup docs.
 
 ## What you'll create
 
@@ -23,7 +23,7 @@ cp .env.example .env
 
 Set `AUTH0_DOMAIN` (for example `my-tenant.us.auth0.com`) and `AUTH0_ISSUER` (the same with `https://` and a trailing slash).
 
-> **Identifiers must match exactly, trailing slash included.** This guide uses `https://reports.demo.test/` for the MCP server and `https://reports-backend.demo.test/` for the reports API. You can choose your own. Keep them absolute URIs and use the same strings everywhere.
+> **Use the same endpoint for `MCP_URL`, `MCP_RESOURCE`, and the Auth0 MCP API identifier.** The loopback example is `http://localhost:3000/mcp`. For a remote deployment, use your public HTTPS endpoint ending in `/mcp`. The reports API needs a separate identifier. A tenant already configured with the older fixture identifier can still use the saved-token flow. Set up a matching API identifier and exchange binding to test fresh-client discovery.
 
 ## 2.1 Tenant settings
 
@@ -40,13 +40,13 @@ Register an API:
 
 | Setting | Value |
 |---|---|
-| Identifier | `https://reports.demo.test/` |
+| Identifier | `http://localhost:3000/mcp` |
 | Signing algorithm | RS256 |
 | Permissions | `read:reports`, `read:github` |
 | RBAC | On, with **Add Permissions in the Access Token** on |
 | Token dialect | `rfc9068_profile_authz`, so tokens carry a `permissions` claim |
 
-The server grants a permission only when it appears in both the `scope` and `permissions` claims ([why](../docs/FRICTION.md#5-auth0-puts-permissions-in-a-different-claim-than-my-first-build-assumed-confirmed-from-docs-fixed-in-code)).
+For the RBAC tokens in this guide, the server checks that a permission appears in both the `scope` and `permissions` claims ([why](../docs/FRICTION.md#5-auth0-puts-permissions-in-a-different-claim-than-my-first-build-assumed-confirmed-from-docs-fixed-in-code)).
 
 Docs: [Register APIs](https://auth0.com/docs/get-started/auth0-overview/set-up-apis) · [Enable RBAC for APIs](https://auth0.com/docs/get-started/apis/enable-role-based-access-control-for-apis) · [Authorization for Your MCP Server](https://auth0.com/ai/docs/mcp/get-started/authorization-for-your-mcp-server)
 
@@ -95,7 +95,7 @@ The MCP server uses this application to exchange the user's token for one issued
 | Setting | Value |
 |---|---|
 | `app_type` | `resource_server` |
-| `resource_server_identifier` | `https://reports.demo.test/`: the **MCP server's** identifier, not the reports API's |
+| `resource_server_identifier` | `http://localhost:3000/mcp`: the **MCP server's** identifier, not the reports API's |
 | Token exchange | `allow_any_profile_of_type: ["on_behalf_of_token_exchange"]` |
 
 Then create a client grant from this application to `https://reports-backend.demo.test/` for `read:reports`, with `subject_type: user`.
@@ -111,7 +111,8 @@ At this point these values are filled in:
 ```bash
 AUTH0_DOMAIN=my-tenant.us.auth0.com
 AUTH0_ISSUER=https://my-tenant.us.auth0.com/
-MCP_RESOURCE=https://reports.demo.test/
+MCP_RESOURCE=http://localhost:3000/mcp
+MCP_URL=http://localhost:3000/mcp
 REPORTS_AUDIENCE=https://reports-backend.demo.test/
 TOKEN_EXCHANGE_CLIENT_ID=...
 TOKEN_EXCHANGE_CLIENT_SECRET=...

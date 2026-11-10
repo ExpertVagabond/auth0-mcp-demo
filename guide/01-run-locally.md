@@ -15,7 +15,7 @@ The MCP server and reports API are the same code you run against Auth0 in step 3
 ```bash
 git clone https://github.com/ExpertVagabond/mcp-agent-identity-auth0.git
 cd mcp-agent-identity-auth0
-npm install
+npm ci
 npm run doctor
 ```
 
@@ -42,7 +42,7 @@ Every request prints the same four lines:
 
 | # | Request | Expected result | What it proves |
 |---|---|---|---|
-| 1 | No token | **401**, with a `WWW-Authenticate` header pointing at `/.well-known/oauth-protected-resource` and naming the scopes | A client can discover the authorization server and what to request by itself |
+| 1 | No token | **401**, with a `WWW-Authenticate` header pointing at `/.well-known/oauth-protected-resource/mcp` and naming the scopes | A client can discover the authorization server and what to request by itself |
 | 2 | Wrong audience | **401** `invalid_token` | A signed token is refused unless it was issued for this server |
 | 3 | Missing permission | **403** `insufficient_scope`, `scope="read:reports"` | Known user, not allowed, and told which scope is missing |
 | 4 | Allowed, with on-behalf-of exchange | **200** and the report | The server exchanges the user's token instead of forwarding it |
@@ -63,7 +63,7 @@ The exit code is 0 when every request matches. A full saved run is in [`docs/wal
 npm test
 ```
 
-Expected: `tests 23`, `pass 23`, `fail 0`. The last test runs the demo itself.
+Expect zero failures. The suite includes an MCP client that discovers OAuth and signs in with PKCE from a clean state. It also runs the six-request walkthrough.
 
 ## 5. Or verify everything at once
 
@@ -73,7 +73,7 @@ npm run verify
 
 ```
 PASS  doctor  ready
-PASS  tests   23/23 passing
+PASS  tests   28/28 passing
 PASS  demo    6/6 requests matched
 VERIFIED: the local demo reproduces on this machine.
 ```
