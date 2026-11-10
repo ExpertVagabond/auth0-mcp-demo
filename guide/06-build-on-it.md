@@ -64,7 +64,7 @@ Docs: [Token Vault](https://auth0.com/docs/secure/call-apis-on-users-behalf/toke
 
 ## 4. Connect a standard MCP client
 
-The server speaks standard MCP over streamable HTTP, so any MCP client can use it with a token. With both servers running (guide step 3) and a saved token, try the official [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) from the command line:
+The server speaks standard MCP over streamable HTTP with bearer tokens. A client that supports that transport and a protocol version the bundled SDK implements (up to `2025-11-25`) can use it. With both servers running (guide step 3) and a saved token, try the official [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) from the command line:
 
 ```bash
 npx @modelcontextprotocol/inspector --cli http://localhost:3000/mcp --transport http \
@@ -86,6 +86,8 @@ For a client that signs users in by itself, register it with Auth0 ahead of time
 Three values must be the same string: `MCP_URL`, `MCP_RESOURCE`, and the Auth0 MCP API identifier. Use your public HTTPS endpoint ending in `/mcp`, for example `https://mcp.example.com/mcp`. The server derives the metadata URL it advertises from `MCP_URL`. Run `npm run doctor` afterwards: it warns when `MCP_RESOURCE` and `MCP_URL` differ.
 
 The reports API keeps its own identifier. Never reuse the MCP server's.
+
+Both servers listen on `127.0.0.1` by default, as the MCP transport spec recommends for local servers. Behind a reverse proxy or in a container, set `HOST=0.0.0.0`. The MCP server rejects any request whose `Origin` header isn't its own (403, to block DNS rebinding). If a browser-based client calls it from another origin, list that origin in `ALLOWED_ORIGINS` (comma-separated).
 
 This repository is a reference implementation. Before production, add what it deliberately leaves out: persistent storage for the exchange cache (it's in memory), rate limiting, structured audit logs, and your real data in place of the fixtures.
 
