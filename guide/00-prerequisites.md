@@ -13,6 +13,18 @@ That's all. Step 1 runs a stand-in for Auth0 on your machine and needs no accoun
 - A browser, for signing in during step 3.
 - The [Auth0 CLI](https://auth0.github.io/auth0-cli/) is optional. The official MCP quickstarts use it, but every setting in step 2 can also be made in the Auth0 Dashboard.
 
+### Which Auth0 plan you need
+
+Sign up at [auth0.com/signup](https://auth0.com/signup). There's no credit card and no paid plan to choose. From the [Auth0 pricing page](https://auth0.com/pricing) (checked 2026-11-10):
+
+| | |
+|---|---|
+| **New tenants** | Start with a **22-day trial** of paid-plan features. After it ends, the **Free plan** activates automatically. |
+| **Free plan** | $0, up to 25,000 monthly active users, no credit card. **Auth for MCP** is listed as included, and the plan includes **Token Vault**, with a limit on connections. |
+| **Not needed here** | Custom Token Exchange (a paid feature) is a different feature from the on-behalf-of exchange this repo uses. |
+
+This repo was built and verified on a development tenant during its trial. Plans change, so check the pricing table for the features in steps 2 to 4 before you rely on them after the trial ends.
+
 ## For Token Vault (step 4, optional)
 
 - A GitHub account.

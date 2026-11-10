@@ -111,7 +111,7 @@ Stuck? Run `npm run doctor`, then see [Troubleshooting](guide/troubleshooting.md
 
 - [Node.js](https://nodejs.org/en/download) 22 or later, and npm
 - [git](https://git-scm.com)
-- For live: an [Auth0](https://auth0.com/signup) account and tenant
+- For live: a free [Auth0](https://auth0.com/signup) account and tenant. New tenants start with a 22-day trial, then move to the Free plan ([which plan you need](guide/00-prerequisites.md#which-auth0-plan-you-need))
 - For GitHub through Token Vault: a [GitHub OAuth app](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) you own
 
 ## Download and run (local)

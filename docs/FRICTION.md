@@ -9,6 +9,7 @@ When this entry was first written, there was no Auth0 tenant on this machine, so
 ## 2. Free-tier limits are unclear from the public pages (confirmed)
 Searching for the free developer tier turned up conflicting figures: a monthly-active-user cap of 100 on Okta Developer Edition, a 25,000 MAU claim from a third-party tracker, and a deactivation notice on Developer Edition orgs. Auth0's entity-limit page lists free-tenant object counts but not the MAU cap.
 **Would help:** one page that states the free tier, its MAU cap, and whether Developer Edition signups are open.
+**Update (2026-11-10):** the [pricing page](https://auth0.com/pricing) now states it. The Free plan is $0 for up to 25,000 monthly active users with no credit card, and new tenants get a 22-day trial before the Free plan activates. It still doesn't say, per feature, what changes for an MCP builder when the trial ends. See [guide/00-prerequisites.md](../guide/00-prerequisites.md#which-auth0-plan-you-need).
 
 ## 3. The challenge format for a 401 has to be assembled by hand (spec-checked; no Auth0 example)
 The MCP authorization flow depends on the `WWW-Authenticate` header carrying `resource_metadata`, which points the client at the protected-resource metadata. The MCP spec requires that header, and the server's 401 and 403 challenges match it. The Auth0 pages don't show one, though, so a developer writing a server in a plain HTTP framework has nothing to copy from Auth0.
