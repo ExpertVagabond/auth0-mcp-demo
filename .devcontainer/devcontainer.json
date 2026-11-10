@@ -1,6 +1,9 @@
 {
   "name": "mcp-agent-identity-auth0",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
   "postCreateCommand": "npm ci && npm run doctor",
   "forwardPorts": [3000, 3100],
   "portsAttributes": {

@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org/)
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ExpertVagabond/mcp-agent-identity-auth0)
+[![Run with Claude Code](https://img.shields.io/badge/Run%20with-Claude%20Code-D97757?logo=claude&logoColor=white)](https://claude.ai/code?prompt=Reproduce%20the%20demo%20in%20this%20repository%20by%20following%20AGENTS.md.%20Run%20npm%20ci%2C%20then%20npm%20run%20verify%2C%20then%20npm%20run%20demo%20--%20--json.%20Report%20each%20success%20criterion%20from%20AGENTS.md%20with%20the%20output%20that%20proves%20it.%20Do%20not%20run%20the%20Auth0%20steps%3B%20they%20need%20a%20person.&repositories=ExpertVagabond%2Fmcp-agent-identity-auth0)
 
 One MCP server, protected by Auth0, and one story: **who can call which tool, and how everything else is refused.**
 
@@ -126,7 +127,15 @@ npm run demo -- --step   # press Enter to move through the six requests
 
 Or open it in [GitHub Codespaces](https://codespaces.new/ExpertVagabond/mcp-agent-identity-auth0) and run the same commands there.
 
-**Using a coding agent?** Point it at [AGENTS.md](AGENTS.md). It has exact commands and success criteria, and `npm run demo -- --json` gives a machine-readable result.
+### Run it with an AI
+
+| Option | What happens | You need |
+|---|---|---|
+| [**Run with Claude Code**](https://claude.ai/code?prompt=Reproduce%20the%20demo%20in%20this%20repository%20by%20following%20AGENTS.md.%20Run%20npm%20ci%2C%20then%20npm%20run%20verify%2C%20then%20npm%20run%20demo%20--%20--json.%20Report%20each%20success%20criterion%20from%20AGENTS.md%20with%20the%20output%20that%20proves%20it.%20Do%20not%20run%20the%20Auth0%20steps%3B%20they%20need%20a%20person.&repositories=ExpertVagabond%2Fmcp-agent-identity-auth0) | Opens [Claude Code on the web](https://code.claude.com/docs/en/web-quickstart) with this repository selected and a prompt filled in to reproduce the demo. Review the prompt and send it, and Claude runs it in a cloud session | A Claude account with Claude Code |
+| [**Open in Codespaces**](https://codespaces.new/ExpertVagabond/mcp-agent-identity-auth0), then run `claude` | A browser VS Code with Node 22 and the [Claude Code CLI and extension](https://code.claude.com/docs/en/devcontainer) preinstalled | A GitHub account, plus a Claude account for `claude` |
+| Any coding agent | Point it at [AGENTS.md](AGENTS.md): exact commands, success criteria and `npm run demo -- --json` | Node.js 22 |
+
+Every option runs the local demo, which needs no Auth0 account. The live Auth0 steps always need a person for tenant setup and sign-in.
 
 Run the tests with `npm test`. The suite includes a fresh SDK client that follows the 401 challenge, completes authorization code with PKCE against the local issuer, and calls `read_report`.
 
