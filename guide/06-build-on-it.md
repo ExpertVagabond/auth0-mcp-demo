@@ -77,7 +77,7 @@ npx @modelcontextprotocol/inspector --cli http://localhost:3000/mcp --transport 
   --method tools/call --tool-name read_report --tool-arg week=2026-W43
 ```
 
-The first lists `whoami`, `read_report`, `github_profile` and `github_open_prs`. The second returns the report through the on-behalf-of exchange. Both were checked against a live tenant on 2026-11-10.
+The first lists `whoami`, `read_report`, `github_profile` and `github_open_prs`. The second returns the report through the on-behalf-of exchange. Both are checked against a live tenant ([verification log](../docs/VERIFICATION.md)).
 
 For a client that signs users in by itself, register it with Auth0 ahead of time, as the login application in guide step 2.5 is. Dynamically registered clients can't use social logins ([FRICTION.md item 12](../docs/FRICTION.md#12-dynamically-registered-clients-cant-use-social-connections-confirmed-live-2026-10-21)).
 

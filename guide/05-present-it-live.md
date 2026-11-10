@@ -94,12 +94,12 @@ Switch to the README and show the two token claim sets. If you have a verified t
 
 | They ask | Short answer |
 |---|---|
-| Is this real Auth0? | The demo uses a local issuer so it runs anywhere. The same server runs against a live Auth0 tenant. I verified it on Oct 21 and again on Nov 10: browser login, on-behalf-of exchange, Token Vault, passthrough refused. Guide steps 2 and 3 have the setup. |
+| Is this real Auth0? | The demo uses a local issuer so it runs anywhere. The same server runs against a live Auth0 tenant: browser login, on-behalf-of exchange, Token Vault, and passthrough refused ([verification log](../docs/VERIFICATION.md)). Guide steps 2 and 3 have the setup. |
 | Why exchange instead of forwarding the token? | A forwarded token's audience is the MCP server, so the backend can't trust it and shouldn't. Exchange gives the backend a token issued for it, for the same user, with narrower reach. The MCP spec forbids passthrough. |
 | 401 vs 403? | 401: we don't know who you are, or the token isn't for us. 403: we know who you are, you lack the permission, and we name the one you need. |
 | How does Token Vault fit? | The GitHub tool exchanges the user's token for the linked GitHub token inside the server. The agent gets the result, never the GitHub credential. |
 | What would you improve in Auth0? | [docs/FRICTION.md](../docs/FRICTION.md). Two examples: on-behalf-of errors that don't name the misconfigured client binding, and dynamically registered clients that can't use social logins. |
-| Does it follow the latest MCP spec? | The [spec check](../docs/MCP-SPEC-CHECK.md) lists the covered behaviors. A fresh SDK client follows discovery, exchanges a code with PKCE, and calls a tool against the local issuer. The verification log distinguishes that test from the earlier saved-token Auth0 run. |
+| Does it follow the latest MCP spec? | The [spec check](../docs/MCP-SPEC-CHECK.md) lists the covered behaviors. A fresh SDK client follows discovery, exchanges a code with PKCE, and calls a tool against the local issuer. |
 | How would you teach this? | This exact sequence as a workshop: one allowed call and five refusals, each with a named reason, then the same build against a real tenant. |
 
 ## If something breaks

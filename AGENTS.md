@@ -47,7 +47,7 @@ Stop both servers when you're done.
 
 - **Never commit `.env` or `.tokens/`.** Git ignores both. Don't print secrets or tokens. The scripts save tokens without printing them, and so should you.
 - **Never print a full Auth0 application object.** Application objects can include signing keys.
-- Read API identifiers from `.env`. Use the same URL for `MCP_RESOURCE` and `MCP_URL` when testing discovery. Older fixture identifiers can still be used for saved-token checks.
+- Read API identifiers from `.env`. Use the same URL for `MCP_RESOURCE` and `MCP_URL` when testing discovery.
 - If something fails, check [guide/troubleshooting.md](guide/troubleshooting.md) first. It maps each real error to its fix.
 
 ## Changing this repo
