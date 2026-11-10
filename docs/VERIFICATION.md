@@ -2,6 +2,19 @@
 
 What has been checked against a live Auth0 development tenant, and when. The tenant hostname and credentials are intentionally not committed.
 
+## 2026-11-10 (about 11:25 ET): live tenant check on the hardened server (PR #3, merged as `5328ebb`)
+
+Both servers ran against the dev tenant through `npm run start:api` and `npm start`, listening on `127.0.0.1`. They used the saved user token from the morning sign-in and the tenant's existing MCP API identifier, the earlier saved-token configuration. The canonical `/mcp` identifier is still to be verified against the tenant.
+
+| Check | Result |
+|---|---|
+| `npm run check -- --github` | Passed: `whoami`, `read_report` through a live on-behalf-of exchange, and `github_profile` and `github_open_prs` through Token Vault |
+| The user's token sent straight to the reports API | Refused, 401 |
+| A request with `Origin: https://evil.example.com` | Refused, 403 `forbidden_origin` |
+| MCP Inspector CLI `tools/list` with the saved token | 4 tools |
+| Sign-in helper, forged callbacks (wrong `iss`, missing `iss`, correct `iss` with a fake code) | Rejected, rejected, accepted (then Auth0 rejected the fake code). Run before PR #3, at about 10:20 |
+| Local suite and demo on `main` at `5328ebb` | 30/30 tests; all six demo requests matched; CI green |
+
 ## 2026-11-10: panel readiness checks against the local issuer
 
 - A fresh MCP SDK client follows the protected-resource challenge, discovers the issuer, sends the canonical resource on both OAuth requests, completes PKCE, and calls `read_report`.
@@ -10,7 +23,7 @@ What has been checked against a live Auth0 development tenant, and when. The ten
 
 The tenant runs below used the earlier saved-token configuration. Repeat the [live guide](../guide/03-run-against-auth0.md) with the updated canonical endpoint to verify the new configuration against Auth0.
 
-## 2026-11-10: end-to-end recheck
+## 2026-11-10 (about 10:03 ET): end-to-end recheck
 
 | Check | Result |
 |---|---|
@@ -21,7 +34,7 @@ The tenant runs below used the earlier saved-token configuration. Repeat the [li
 | `github_open_prs` through Token Vault | Passed: returned the user's open public pull requests |
 | The user's token sent straight to the reports API | Refused, 401 |
 | A machine-to-machine token | `whoami` passed. The exchange refused it with `The user is not found`, as it should: on-behalf-of needs a user |
-| Local suite and demo | 23 tests passing; all six demo requests matched; CI green |
+| Local suite and demo, at the time | 23 tests passing; all six demo requests matched; CI green (the suite is now 30; see above) |
 
 ## 2026-10-21: first live run
 
