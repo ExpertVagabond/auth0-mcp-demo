@@ -2,8 +2,20 @@
 
 An MCP server that requires an OAuth 2.0 access token. Tokens are validated locally against the authorization server's JWKS. The server checks the issuer, the audience (the MCP resource identifier), and expiry. Tools can require a scope.
 
+## Five-minute demo
+
+No Auth0 tenant or sign-in needed. This starts a mock issuer, the reports API and the MCP server on free local ports, then walks through six requests and prints the status of each:
+
+    npm install && npm run demo
+
+Add `--step` to wait for Enter between steps:
+
+    npm run demo -- --step
+
+The steps: no token (401 with a metadata challenge), wrong audience (401), valid token without `read:reports` (403 `insufficient_scope`), valid token with it (on-behalf-of exchange, then the report), the user's MCP token sent straight to the reports API (401), and malformed JSON and an oversized body (400, 413). The exit code is non-zero if any status differs. A saved run is in `docs/walkthrough-output.txt`.
+
 Status:
-- **Local, rechecked 2026-11-06:** `npm test`, 22 tests, all passing. They use a mock issuer that signs RS256 tokens and runs token exchange.
+- **Local, rechecked 2026-11-10:** `npm test`, 23 tests, all passing (the last one runs the demo walkthrough). They use a mock issuer that signs RS256 tokens and runs token exchange.
 - **Live Auth0 flows, checked 2026-10-21:** the checks below ran against a development tenant. The tenant hostname and credentials are intentionally not committed.
 - **Live, machine-to-machine token:** `scripts/live-check.mjs` called `whoami` and `read_report`.
 - **Live, browser login:** `scripts/login-check.mjs` ran the authorization-code flow with PKCE. The user signed in with Google and got the Report Reader role. `live-check.mjs` then passed with that user's token.
@@ -73,7 +85,11 @@ Then start the MCP server with `REPORTS_API_URL=http://localhost:3100`, `REPORTS
 
 - `server.mjs`: the MCP server.
 - `reports-api.mjs`: the backend reports API.
-- `test/e2e.test.mjs`: the test suite, including the mock issuer and the reports API.
+- `test/e2e.test.mjs`: the test suite.
+- `test/mock-issuer.mjs`: the mock issuer, token exchange and GitHub stub, shared by the tests and the demo.
+- `test/walkthrough.test.mjs`: runs the demo and checks it exits 0.
+- `scripts/walkthrough.mjs`: the narrated demo (`npm run demo`).
+- `docs/walkthrough-output.txt`: a saved plain-text run of the demo.
 - `FRICTION.md`, `DOCS-REVIEW.md`: developer-experience notes from building this.
 
 ## Security

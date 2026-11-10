@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/e2e.test.mjs"
+    "test": "node --test test/e2e.test.mjs test/walkthrough.test.mjs",
+    "demo": "node scripts/walkthrough.mjs"
   },
   "keywords": [],
   "author": "",

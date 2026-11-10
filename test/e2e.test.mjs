@@ -1,93 +1,47 @@
 // End-to-end: a mock OAuth issuer signs RS256 access tokens and runs token exchange, the MCP server
 // validates the user's token and exchanges it, the reports API validates the exchanged token,
 // and a real MCP client calls the tools. Run with: npm test
+// The mock issuer lives in ./mock-issuer.mjs so scripts/walkthrough.mjs can reuse it.
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { createServer } from "node:http";
-import { generateKeyPair, exportJWK, SignJWT, jwtVerify } from "jose";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createMcpApp } from "../server.mjs";
 import { createReportsApi } from "../reports-api.mjs";
+import {
+  createMockIssuer,
+  createGithubStub,
+  closeServer,
+  RESOURCE,
+  REPORTS_AUD,
+  OBO_CLIENT_ID,
+  OBO_CLIENT_SECRET,
+} from "./mock-issuer.mjs";
 
 const ISSUER_PORT = 4101;
 const MCP_PORT = 4102;
 const REPORTS_PORT = 4103;
 const GITHUB_STUB_PORT = 4104;
-const FEDERATED_GRANT = "urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token";
 const ISSUER = `http://localhost:${ISSUER_PORT}/`;
-const RESOURCE = "https://reports.demo.test/";
-const REPORTS_AUD = "https://reports-backend.demo.test/";
 const MCP_URL = `http://localhost:${MCP_PORT}/mcp`;
-const OBO_CLIENT_ID = "obo-test-client";
-const OBO_CLIENT_SECRET = "obo-test-secret";
 
-let privateKey;
-let publicKey;
-let publicJwk;
-let issuerServer;
+let mockIssuer;
+let sign;
 let mcpServer;
 let reportsServer;
 let githubStub;
-let exchangeCount = 0;
 
 before(async () => {
-  const pair = await generateKeyPair("RS256");
-  privateKey = pair.privateKey;
-  publicKey = pair.publicKey;
-  publicJwk = { ...(await exportJWK(pair.publicKey)), kid: "test-key", alg: "RS256", use: "sig" };
-
-  issuerServer = createServer(async (req, res) => {
-    if (req.url === "/.well-known/jwks.json") {
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ keys: [publicJwk] }));
-      return;
-    }
-    if (req.url === "/oauth/token" && req.method === "POST") {
-      const chunks = [];
-      for await (const chunk of req) chunks.push(chunk);
-      const form = new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
-      const { status, body } = await mockTokenEndpoint(form);
-      res.writeHead(status, { "content-type": "application/json" });
-      res.end(JSON.stringify(body));
-      return;
-    }
-    res.writeHead(404).end();
-  });
-  await new Promise((r) => issuerServer.listen(ISSUER_PORT, r));
+  mockIssuer = await createMockIssuer({ port: ISSUER_PORT });
+  sign = mockIssuer.sign;
+  await mockIssuer.start();
 
   reportsServer = createReportsApi({ issuer: ISSUER, audience: REPORTS_AUD });
   await new Promise((r) => reportsServer.listen(REPORTS_PORT, r));
 
   // Stands in for api.github.com: accepts only tokens that Token Vault issued in these tests.
-  githubStub = createServer((req, res) => {
-    const url = new URL(req.url, "http://github.stub");
-    const authed = (req.headers.authorization ?? "").startsWith("Bearer gh-token-");
-    if (!authed) {
-      res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ message: "Bad credentials" }));
-      return;
-    }
-    if (url.pathname === "/user") {
-      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ login: "test-user" }));
-      return;
-    }
-    if (url.pathname === "/search/issues") {
-      const q = url.searchParams.get("q") ?? "";
-      const perPage = Number(url.searchParams.get("per_page") ?? 0);
-      if (!q.includes("is:pr") || !q.includes("author:@me")) {
-        res.writeHead(422, { "content-type": "application/json" }).end(JSON.stringify({ message: "bad query" }));
-        return;
-      }
-      const items = [
-        { title: "Fix token refresh", html_url: "https://github.com/acme/api/pull/12", repository_url: "https://api.github.com/repos/acme/api", created_at: "2026-10-18T09:00:00Z" },
-        { title: "Docs for webhooks", html_url: "https://github.com/acme/docs/pull/4", repository_url: "https://api.github.com/repos/acme/docs", created_at: "2026-10-19T09:00:00Z" },
-      ].slice(0, perPage);
-      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ total_count: items.length, items }));
-      return;
-    }
-    res.writeHead(404).end();
-  });
+  githubStub = createGithubStub();
   await new Promise((r) => githubStub.listen(GITHUB_STUB_PORT, r));
 
   mcpServer = createMcpApp({
@@ -107,86 +61,9 @@ before(async () => {
 });
 
 after(async () => {
-  // fetch keeps sockets alive, so close them first or server.close() never calls back.
-  for (const server of [mcpServer, reportsServer, githubStub, issuerServer]) {
-    server.closeAllConnections();
-    await new Promise((r) => server.close(r));
-  }
+  for (const server of [mcpServer, reportsServer, githubStub]) await closeServer(server);
+  await mockIssuer.stop();
 });
-
-// Mirrors Auth0's RFC 8693 on-behalf-of exchange closely enough for these tests:
-// the subject token must be valid for the MCP resource, the client must authenticate,
-// and the result is a token for the requested audience with the user's permissions and no scope claim.
-async function mockTokenEndpoint(form) {
-  if (form.get("grant_type") === FEDERATED_GRANT) {
-    return mockTokenVaultExchange(form);
-  }
-  if (form.get("grant_type") !== "urn:ietf:params:oauth:grant-type:token-exchange") {
-    return { status: 400, body: { error: "unsupported_grant_type" } };
-  }
-  if (form.get("client_id") !== OBO_CLIENT_ID || form.get("client_secret") !== OBO_CLIENT_SECRET) {
-    return { status: 401, body: { error: "invalid_client" } };
-  }
-  let subject;
-  try {
-    ({ payload: subject } = await jwtVerify(form.get("subject_token"), publicKey, { issuer: ISSUER, audience: RESOURCE }));
-  } catch {
-    return { status: 400, body: { error: "invalid_request", error_description: "subject token is not valid for this resource" } };
-  }
-  if (form.get("audience") !== REPORTS_AUD) {
-    return { status: 400, body: { error: "invalid_request", error_description: "unknown audience" } };
-  }
-  exchangeCount += 1;
-  const permissions = Array.isArray(subject.permissions)
-    ? subject.permissions
-    : typeof subject.scope === "string"
-      ? subject.scope.split(" ")
-      : [];
-  const access_token = await new SignJWT({ permissions })
-    .setProtectedHeader({ alg: "RS256", kid: "test-key" })
-    .setIssuer(ISSUER)
-    .setAudience(REPORTS_AUD)
-    .setSubject(subject.sub)
-    .setIssuedAt()
-    .setExpirationTime("1h")
-    .sign(privateKey);
-  return { status: 200, body: { access_token, token_type: "Bearer", expires_in: 3600 } };
-}
-
-// Token Vault: returns the GitHub token stored for the user. A user with no linked GitHub account gets an error,
-// as Auth0 returns it.
-async function mockTokenVaultExchange(form) {
-  if (form.get("client_id") !== OBO_CLIENT_ID || form.get("client_secret") !== OBO_CLIENT_SECRET) {
-    return { status: 401, body: { error: "invalid_client" } };
-  }
-  let subject;
-  try {
-    ({ payload: subject } = await jwtVerify(form.get("subject_token"), publicKey, { issuer: ISSUER, audience: RESOURCE }));
-  } catch {
-    return { status: 400, body: { error: "invalid_request", error_description: "subject token is not valid for this resource" } };
-  }
-  if (form.get("connection") !== "github") {
-    return { status: 400, body: { error: "invalid_request", error_description: "unknown connection" } };
-  }
-  if (subject.sub === "auth0|no-github") {
-    return {
-      status: 400,
-      body: { error: "federated_connection_refresh_token_not_found", error_description: "There is no connected account for that user and connection." },
-    };
-  }
-  return { status: 200, body: { access_token: `gh-token-${subject.sub}`, token_type: "Bearer", expires_in: 28791 } };
-}
-
-async function sign({ scope = "", permissions, aud = RESOURCE, iss = ISSUER, sub = "auth0|demo-user", expiresIn = "5m" } = {}) {
-  return new SignJWT(permissions ? { scope, permissions } : { scope })
-    .setProtectedHeader({ alg: "RS256", kid: "test-key" })
-    .setIssuer(iss)
-    .setAudience(aud)
-    .setSubject(sub)
-    .setIssuedAt()
-    .setExpirationTime(expiresIn)
-    .sign(privateKey);
-}
 
 async function connect(token) {
   const transport = new StreamableHTTPClientTransport(new URL(MCP_URL), {
@@ -334,10 +211,10 @@ test("oversized body with a valid token: 413, server keeps running", async () =>
 test("read_report exchanges the user's token once and reuses the result", async () => {
   const token = await sign({ scope: "read:reports", permissions: ["read:reports"], sub: "auth0|cache-check" });
   const client = await connect(token);
-  const before = exchangeCount;
+  const before = mockIssuer.exchanges.length;
   await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
   await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
-  assert.equal(exchangeCount - before, 1);
+  assert.equal(mockIssuer.exchanges.length - before, 1);
   await client.close();
 });
 
