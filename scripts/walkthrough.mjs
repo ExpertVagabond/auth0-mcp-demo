@@ -6,6 +6,7 @@
 //   npm run demo -- --step  wait for Enter between steps
 
 import http from "node:http";
+import net from "node:net";
 import readline from "node:readline";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -59,6 +60,43 @@ let rl;
 let stdinEnded = false;
 const queuedLines = [];
 const waiting = [];
+
+// Streams a body of `bytes` in 16 KB chunks over a plain socket and returns the first status line the server sends.
+// The server answers 413 and closes while the client is still uploading, so a normal client can lose the response
+// to a connection reset. Reading as we write, and stopping at the first reply, makes the result repeatable.
+function postOversized(url, headers, bytes) {
+  const { hostname, port, pathname } = new URL(url);
+  return new Promise((resolve) => {
+    const socket = net.connect(Number(port), hostname);
+    let received = "";
+    let done = false;
+    const finish = (status, why) => {
+      if (done) return;
+      done = true;
+      socket.destroy();
+      resolve({ status, why });
+    };
+    socket.on("data", (d) => {
+      received += d.toString("latin1");
+      const m = received.match(/^HTTP\/1\.1 (\d{3})/);
+      if (m) finish(Number(m[1]));
+    });
+    let lastError = "closed";
+    socket.on("error", (err) => { lastError = err.code ?? err.message; });
+    socket.on("close", () => finish(`no response (${lastError})`));
+    const head = [`POST ${pathname} HTTP/1.1`, `host: ${hostname}:${port}`, `content-length: ${bytes}`, ...Object.entries(headers).map(([k, v]) => `${k}: ${v}`), "", ""].join("\r\n");
+    socket.write(head);
+    const chunk = Buffer.alloc(16 * 1024, "x");
+    let sent = 0;
+    const pump = () => {
+      if (done) return;
+      if (sent >= bytes) return;
+      sent += chunk.length;
+      socket.write(chunk, () => setImmediate(pump));
+    };
+    pump();
+  });
+}
 
 function waitForEnter() {
   if (!stepMode || stdinEnded) return Promise.resolve();
@@ -210,7 +248,7 @@ async function main() {
   await step(6, "malformed JSON and an oversized body", async () => {
     const token = await mock.sign({ scope: "read:reports" });
     const bad = await post(mcpUrl, mcpHeaders(token), "{not json");
-    const big = await post(mcpUrl, mcpHeaders(token), callTool(3, "read_report", { week: "x".repeat(1.5 * 1024 * 1024) })).catch((err) => ({ status: `no response (${err.code ?? err.message})` }));
+    const big = await postOversized(mcpUrl, mcpHeaders(token), 1024 * 1024 + 16 * 1024);
     const client = new Client({ name: "walkthrough", version: "0.1.0" });
     await client.connect(new StreamableHTTPClientTransport(new URL(mcpUrl), { requestInit: { headers: { Authorization: `Bearer ${token}` } } }));
     const who = await client.callTool({ name: "whoami", arguments: {} });
@@ -221,7 +259,7 @@ async function main() {
       status: `${bad.status} and ${big.status}`, expected: "400 and 413",
       lines: [
         `request:  POST ${mcpUrl}  body "{not json"  ->  ${bad.status}  ${bad.text}`,
-        `request:  POST ${mcpUrl}  body of 1.5 MB (limit is 1 MB)  ->  ${big.status}`,
+        `request:  POST ${mcpUrl}  body of 1 MB + 16 KB (limit is 1 MB)  ->  ${big.status}`,
         `follow-up: whoami on a fresh connection  ->  ${stillUp ? "server still up, answered" : "no answer"}`,
       ],
       why: "Bad input gets a clean error and the server keeps serving; it doesn't crash or buffer an unbounded body.",
