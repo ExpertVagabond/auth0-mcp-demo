@@ -7,13 +7,15 @@ How this server lines up with the [MCP authorization specification](https://mode
 | The spec says | This repo | Status |
 |---|---|---|
 | Servers **MUST** implement Protected Resource Metadata (RFC 9728) | `GET /.well-known/oauth-protected-resource/mcp` returns `resource`, `authorization_servers`, `scopes_supported`, `bearer_methods_supported` | ✅ |
-| The 401 **SHOULD** carry `resource_metadata` and the `scope` to request | `Bearer resource_metadata="…", scope="read:reports read:github"` | ✅ (scope added 2026-11-10) |
+| The 401 **SHOULD** carry `resource_metadata` and the `scope` to request | `Bearer resource_metadata="…", scope="read:reports read:github"`, listing only the scopes of tools that are registered (`read:github` only when Token Vault is configured) | ✅ (scope added 2026-11-10) |
 | Servers **MUST** validate that tokens were issued for them (audience, RFC 8707) | The server verifies the signature with the issuer's JWKS, checks issuer and audience, and requires expiry and a nonempty subject. Demo request 2 shows a wrong-audience token refused | ✅ |
 | Invalid or expired tokens **MUST** get a 401 | 401 with `error="invalid_token"` | ✅ |
 | Insufficient scope **SHOULD** get a 403 with `error="insufficient_scope"`, `scope` and `resource_metadata` | `Bearer error="insufficient_scope", scope="read:reports", resource_metadata="…"`. Demo request 3 | ✅ |
 | Servers **MUST NOT** accept or transit any other tokens | The user's token is never forwarded. The server exchanges it (on-behalf-of) and the reports API refuses the original (demo request 5, live 401 on 2026-11-10) | ✅ |
 | Tokens go in the `Authorization` header only, never the query string | Header only (`bearer_methods_supported: ["header"]`) | ✅ |
 | Bad requests get clear status codes | 400 for malformed JSON, 413 for oversized bodies (demo request 6) | ✅ |
+| Transport: servers **MUST** validate `Origin`; a present, invalid `Origin` gets **403** ([transports, 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)) | Requests with an `Origin` other than the server's own, or one listed in `ALLOWED_ORIGINS`, get `403 forbidden_origin`. Tested in `test/e2e.test.mjs` | ✅ (added 2026-11-10) |
+| Transport: local servers **SHOULD** bind to `127.0.0.1`, not all interfaces | Both servers listen on `127.0.0.1` unless `HOST` is set | ✅ (added 2026-11-10) |
 | `offline_access` **SHOULD NOT** appear in `scopes_supported` or the challenge | Not present | ✅ |
 
 ## The sign-in helper (`scripts/login-check.mjs`, a client)
@@ -28,4 +30,4 @@ How this server lines up with the [MCP authorization specification](https://mode
 ## Choices worth knowing
 
 - **Canonical resource.** The fresh-client test starts without a token and follows the 401 challenge. The resource in metadata, the requested resource, and the access-token audience use the same MCP endpoint. Older saved-token setups can still use the fixture audience documented in the verification log.
-- **Scope in the 401.** The 401 names every scope in `scopes_supported`. The spec also allows naming only what the current request needs. Per-tool scopes are named precisely in the 403.
+- **Scope in the 401.** The 401 names every scope in `scopes_supported`, which covers only the registered tools. The spec also allows naming only what the current request needs. Per-tool scopes are named precisely in the 403.

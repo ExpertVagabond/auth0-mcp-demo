@@ -137,6 +137,22 @@ Or open it in [GitHub Codespaces](https://codespaces.new/ExpertVagabond/mcp-agen
 
 Every option runs the local demo, which needs no Auth0 account. The live Auth0 steps always need a person for tenant setup and sign-in.
 
+**Copy a prompt into any AI.** Each block has a copy button.
+
+For a coding agent that can run commands (Claude Code, Codex, Cursor and similar):
+
+```text
+Clone https://github.com/ExpertVagabond/mcp-agent-identity-auth0 and follow its AGENTS.md to reproduce the local demo: run npm ci, then npm run verify, then npm run demo -- --json. Report each success criterion from AGENTS.md with the output that proves it. Don't run the Auth0 steps; they need a person.
+```
+
+For a chat assistant, to learn the pattern or plan your own build:
+
+```text
+Read https://github.com/ExpertVagabond/mcp-agent-identity-auth0 (README.md, AGENTS.md and the guide/ folder). Explain how this MCP server uses Auth0: the 401 and 403 checks, the on-behalf-of token exchange, and Token Vault. Then walk me through running the local demo, and adding my own protected tool with guide/06-build-on-it.md.
+```
+
+Or open the second prompt directly: [**Ask Claude**](https://claude.ai/new?q=Read%20https%3A%2F%2Fgithub.com%2FExpertVagabond%2Fmcp-agent-identity-auth0%20%28README.md%2C%20AGENTS.md%20and%20the%20guide%2F%20folder%29.%20Explain%20how%20this%20MCP%20server%20uses%20Auth0%3A%20the%20401%20and%20403%20checks%2C%20the%20on-behalf-of%20token%20exchange%2C%20and%20Token%20Vault.%20Then%20walk%20me%20through%20running%20the%20local%20demo%2C%20and%20adding%20my%20own%20protected%20tool%20with%20guide%2F06-build-on-it.md.) · [**Ask ChatGPT**](https://chatgpt.com/?q=Read%20https%3A%2F%2Fgithub.com%2FExpertVagabond%2Fmcp-agent-identity-auth0%20%28README.md%2C%20AGENTS.md%20and%20the%20guide%2F%20folder%29.%20Explain%20how%20this%20MCP%20server%20uses%20Auth0%3A%20the%20401%20and%20403%20checks%2C%20the%20on-behalf-of%20token%20exchange%2C%20and%20Token%20Vault.%20Then%20walk%20me%20through%20running%20the%20local%20demo%2C%20and%20adding%20my%20own%20protected%20tool%20with%20guide%2F06-build-on-it.md.). Both open a new chat with the prompt filled in, and you review it before sending.
+
 Run the tests with `npm test`. The suite includes a fresh SDK client that follows the 401 challenge, completes authorization code with PKCE against the local issuer, and calls `read_report`.
 
 ## How it works
@@ -193,6 +209,7 @@ The GitHub tools appear only when token exchange is configured.
 | `scripts/walkthrough.mjs` | The six-step demo (`npm run demo`, `--step` to present, `--json` for agents) |
 | `scripts/doctor.mjs` | Preflight (`npm run doctor`): what's ready, what's missing, and how to fix it |
 | `AGENTS.md` | Instructions and success criteria for coding agents |
+| `llms.txt` | A map of the repo for AI assistants ([llms.txt convention](https://llmstxt.org)) |
 | `scripts/login-check.mjs`, `live-check.mjs`, `connect-github.mjs` | Sign-in, tool check and account linking against a real tenant |
 | `test/` | The test suite, and the stand-in issuer shared with the demo |
 | `guide/` | Step-by-step guide, steps 0 to 5 |

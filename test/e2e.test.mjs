@@ -106,6 +106,34 @@ test("no token: 401 with a resource_metadata challenge", async () => {
   assert.match(challenge, /^Bearer resource_metadata="http:\/\/localhost:4102\/\.well-known\/oauth-protected-resource\/mcp", scope="read:reports read:github"$/);
 });
 
+test("Origin: an unknown browser Origin gets 403; the server's own origin is allowed", async () => {
+  const post = (origin) => fetch(MCP_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json, text/event-stream", origin },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+  });
+  const evil = await post("https://evil.example.com");
+  assert.equal(evil.status, 403);
+  assert.deepEqual(await evil.json(), { error: "forbidden_origin" });
+  const own = await post(new URL(MCP_URL).origin);
+  assert.equal(own.status, 401, "own origin passes the Origin check and reaches the token check");
+});
+
+test("without Token Vault configured, the 401 and metadata name only read:reports", async () => {
+  const plain = createMcpApp({ issuer: ISSUER, resource: MCP_URL, port: MCP_PORT });
+  await new Promise((resolve) => plain.listen(0, resolve));
+  try {
+    const base = `http://localhost:${plain.address().port}`;
+    const res = await fetch(`${base}/mcp`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    assert.equal(res.status, 401);
+    assert.match(res.headers.get("www-authenticate"), /, scope="read:reports"$/);
+    const meta = await (await fetch(`${base}/.well-known/oauth-protected-resource/mcp`)).json();
+    assert.deepEqual(meta.scopes_supported, ["read:reports"]);
+  } finally {
+    await closeServer(plain);
+  }
+});
+
 test("a fresh SDK client discovers OAuth, completes PKCE, and reads a report", async () => {
   let tokens;
   let authorizationUrl;

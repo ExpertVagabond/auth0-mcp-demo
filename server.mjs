@@ -14,7 +14,6 @@ const GITHUB_SCOPE = "read:github";
 // Which scope each tool needs. A call without it gets HTTP 403 before the tool runs.
 // Which permission each tool needs. Adding a protected tool starts here: the metadata, the 401 and the 403 all read this map.
 const TOOL_SCOPES = { read_report: REPORT_SCOPE, github_profile: GITHUB_SCOPE, github_open_prs: GITHUB_SCOPE };
-const ALL_SCOPES = [...new Set(Object.values(TOOL_SCOPES))];
 const MAX_BODY_BYTES = 1024 * 1024;
 
 function httpError(status, code, message) {
@@ -24,7 +23,7 @@ function httpError(status, code, message) {
   return err;
 }
 
-export function createMcpApp({ issuer, resource, port, publicBase, reports, exchange, github }) {
+export function createMcpApp({ issuer, resource, port, publicBase, reports, exchange, github, allowedOrigins = [] }) {
   // issuer must end with "/" to match Auth0's iss claim exactly.
   const jwks = createRemoteJWKSet(new URL(".well-known/jwks.json", issuer));
   const base = publicBase ?? `http://localhost:${port}`;
@@ -266,8 +265,22 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
     }
   }
 
+  // Scopes for the tools this server actually registers: the GitHub tools exist only when Token Vault is configured.
+  const activeScopes = [...new Set(
+    Object.entries(TOOL_SCOPES).filter(([tool]) => github || !tool.startsWith("github_")).map(([, scope]) => scope),
+  )];
+
+  // MCP transport spec: validate Origin on every request to block DNS rebinding. A present, unknown Origin gets 403.
+  // Clients that aren't browsers send no Origin and pass. Allow more origins with `allowedOrigins` (ALLOWED_ORIGINS).
+  const ownOrigins = [new URL(base).origin, `http://localhost:${port}`, `http://127.0.0.1:${port}`];
+  const originAllowed = new Set([...ownOrigins, ...allowedOrigins]);
+
   const httpServer = createServer(async (req, res) => {
     try {
+      if (req.headers.origin && !originAllowed.has(req.headers.origin)) {
+        res.writeHead(403, { "content-type": "application/json" }).end(JSON.stringify({ error: "forbidden_origin" }));
+        return;
+      }
       await handleRequest(req, res);
     } catch (err) {
       console.error("request failed:", err);
@@ -291,7 +304,7 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
         JSON.stringify({
           resource,
           authorization_servers: [issuer],
-          scopes_supported: ALL_SCOPES,
+          scopes_supported: activeScopes,
           bearer_methods_supported: ["header"],
         }),
       );
@@ -306,7 +319,7 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
     const result = await authenticate(req);
     if (result.error) {
       // The MCP authorization spec (Scope Selection Strategy) says the 401 SHOULD name the scopes to request.
-      const scopes = `scope="${ALL_SCOPES.join(" ")}"`;
+      const scopes = `scope="${activeScopes.join(" ")}"`;
       const challenge =
         result.error === "missing"
           ? `Bearer resource_metadata="${metadataUrl}", ${scopes}`
@@ -370,7 +383,10 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
         }
       : undefined;
   const github = exchange ? { connection: "github", apiUrl: process.env.GITHUB_API_URL ?? "https://api.github.com" } : undefined;
-  createMcpApp({ issuer, resource, port, publicBase, reports, exchange, github }).listen(port, () => {
+  // Local by default (MCP transport spec). Set HOST=0.0.0.0 only behind a proxy or in a container.
+  const host = process.env.HOST ?? "127.0.0.1";
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+  createMcpApp({ issuer, resource, port, publicBase, reports, exchange, github, allowedOrigins }).listen(port, host, () => {
     console.log(`MCP server on http://localhost:${port}/mcp, issuer ${issuer}, resource ${resource}`);
   });
 }

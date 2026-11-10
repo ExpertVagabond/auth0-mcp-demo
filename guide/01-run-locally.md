@@ -73,7 +73,7 @@ npm run verify
 
 ```
 PASS  doctor  ready
-PASS  tests   28/28 passing
+PASS  tests   30/30 passing
 PASS  demo    6/6 requests matched
 VERIFIED: the local demo reproduces on this machine.
 ```

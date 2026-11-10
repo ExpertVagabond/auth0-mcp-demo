@@ -96,7 +96,8 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     console.error("Set AUTH0_ISSUER and REPORTS_AUDIENCE (the backend API identifier).");
     process.exit(1);
   }
-  createReportsApi({ issuer, audience }).listen(port, () => {
+  // Local by default. Set HOST=0.0.0.0 only behind a proxy or in a container.
+  createReportsApi({ issuer, audience }).listen(port, process.env.HOST ?? "127.0.0.1", () => {
     console.log(`Reports API on http://localhost:${port}/reports/{week}, audience ${audience}`);
   });
 }

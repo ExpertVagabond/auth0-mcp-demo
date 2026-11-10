@@ -1,0 +1,25 @@
+# MCP Agent Identity with Auth0
+
+> An MCP server protected by Auth0, with per-tool permissions, on-behalf-of token exchange and Token Vault. One six-request demo of the allowed and refused paths runs locally with no account (`npm run demo`) or against a real Auth0 tenant.
+
+Start with AGENTS.md if you are an agent that runs commands. It has exact commands and success criteria (`npm ci && npm run verify`, `npm run demo -- --json`). The Auth0 tenant steps need a person.
+
+## Run it
+
+- [AGENTS.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/AGENTS.md): commands, success criteria, and rules for changing the repo
+- [README.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/README.md): what it's for, the six requests, how it works
+- [guide/01-run-locally.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/guide/01-run-locally.md): the local demo, with expected output
+
+## Use it against Auth0
+
+- [guide/00-prerequisites.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/guide/00-prerequisites.md): Node 22, and which Auth0 plan you need
+- [guide/02-set-up-auth0.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/guide/02-set-up-auth0.md): tenant settings, APIs, role and applications
+- [guide/03-run-against-auth0.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/guide/03-run-against-auth0.md): run both servers, sign in, call the tools
+- [guide/04-token-vault.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/guide/04-token-vault.md): GitHub through Token Vault
+- [guide/troubleshooting.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/guide/troubleshooting.md): real errors and their fixes
+
+## Build on it
+
+- [guide/06-build-on-it.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/guide/06-build-on-it.md): add a protected tool, call your own API, add a Token Vault provider, connect an MCP client, deploy
+- [docs/MCP-SPEC-CHECK.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/docs/MCP-SPEC-CHECK.md): how the server meets the MCP authorization and transport specs
+- [docs/FRICTION.md](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/blob/main/docs/FRICTION.md): developer-experience findings from building it
