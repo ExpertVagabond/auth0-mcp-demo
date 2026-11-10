@@ -11,6 +11,24 @@ One MCP server, protected by Auth0, and one story: **who can call which tool, an
 - To call a backend for the user, the server **exchanges** the user's token (on-behalf-of) instead of forwarding it.
 - It reaches GitHub through **Token Vault**, so the user's GitHub token never leaves the server.
 
+## What it's for
+
+A working reference for giving an AI agent **scoped, delegated access** through an MCP server, with Auth0 as the authorization server. Use it to:
+
+- **Learn the pattern.** Six requests show each rule allowing or refusing, with the reason.
+- **Start your own server.** Add your own tools, point it at your own API, or add another provider. [Step 6](guide/06-build-on-it.md) has the recipes.
+- **Teach it.** The six requests double as a workshop sequence, and [step 5](guide/05-present-it-live.md) is the script.
+- **Test authorization in CI.** The stand-in issuer runs the same checks with no tenant.
+
+| Your agent needs to... | Pattern in this repo | See |
+|---|---|---|
+| Read your own company API for the signed-in user | On-behalf-of token exchange: the backend gets its own token for the same user | `read_report`, [recipe 2](guide/06-build-on-it.md#2-call-your-own-api-for-the-user) |
+| Act in a SaaS account the user already has (GitHub, Google, Slack, ...) | Token Vault: the provider token stays on the server | `github_profile`, [recipe 3](guide/06-build-on-it.md#3-reach-another-third-party-api-through-token-vault) |
+| Offer some tools to some users and not others | Per-tool permissions, with a 403 that names the missing scope | `TOOL_SCOPES`, [recipe 1](guide/06-build-on-it.md#1-add-your-own-protected-tool) |
+| Work with any standard MCP client | Protected-resource metadata and a 401 that says where to sign in | Request 1, [recipe 4](guide/06-build-on-it.md#4-connect-a-standard-mcp-client) |
+
+It's a reference implementation, not a production service. [Recipe 5](guide/06-build-on-it.md#5-run-it-beyond-localhost) lists what to add before you deploy.
+
 ## Run it in two minutes
 
 In a fresh checkout with Node.js 22 or later:
@@ -66,7 +84,7 @@ The demo groups its checks into six requests. The fourth is the allowed path:
 
 Both services require a valid signature, the expected issuer, an expiry (`exp`), and a subject (`sub`). The exchange preserves the user's subject while changing the audience. The two rows summarize the [token claims observed during the build](docs/FRICTION.md#8-exchanged-tokens-have-no-scope-claim-confirmed-live).
 
-**Try it yourself.** Before advancing from request 4 to 5, predict whether the backend will accept the original token even though it has `read:reports`. Then find the audience check in [the reports API](reports-api.mjs#L25) and the exchange call in [the MCP server](server.mjs#L120). For a third-party API such as GitHub, [Token Vault](guide/04-token-vault.md) supplies a provider token to the server and the MCP client receives only the tool result.
+**Try it yourself.** Before advancing from request 4 to 5, predict whether the backend will accept the original token even though it has `read:reports`. Then find the audience check in [the reports API](reports-api.mjs#L30) and the exchange call in [the MCP server](server.mjs#L142). For a third-party API such as GitHub, [Token Vault](guide/04-token-vault.md) supplies a provider token to the server and the MCP client receives only the tool result.
 
 ## Related content
 
@@ -85,6 +103,7 @@ Both services require a valid signature, the expected issuer, an expiry (`exp`),
 | 3 | [Run it against Auth0](guide/03-run-against-auth0.md) | **Live** |
 | 4 | [Add GitHub through Token Vault](guide/04-token-vault.md) (optional) | **Live** |
 | 5 | [Present it](guide/05-present-it-live.md): a five-minute script | Local |
+| 6 | [Build on it](guide/06-build-on-it.md): your own tools, APIs and providers | Both |
 
 Stuck? Run `npm run doctor`, then see [Troubleshooting](guide/troubleshooting.md).
 

@@ -10,6 +10,7 @@ Work through the steps in order. Steps 0 and 1 need only Node.js and git and run
 | 3 | [Run against Auth0](03-run-against-auth0.md) | Step 2 | 5 min |
 | 4 | [Add GitHub through Token Vault](04-token-vault.md) (optional) | Step 3 and a GitHub OAuth app | 10 min |
 | 5 | [Present it live](05-present-it-live.md) | Step 1 | 5 min |
+| 6 | [Build on it](06-build-on-it.md): add tools, call your own API, add providers, deploy | Step 1 (and steps 2 to 4 for live) | — |
 
 Stuck? See [Troubleshooting](troubleshooting.md). It lists every real error hit while building this, with the fix.
 

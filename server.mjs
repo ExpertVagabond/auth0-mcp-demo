@@ -12,7 +12,9 @@ import { z } from "zod";
 const REPORT_SCOPE = "read:reports";
 const GITHUB_SCOPE = "read:github";
 // Which scope each tool needs. A call without it gets HTTP 403 before the tool runs.
+// Which permission each tool needs. Adding a protected tool starts here: the metadata, the 401 and the 403 all read this map.
 const TOOL_SCOPES = { read_report: REPORT_SCOPE, github_profile: GITHUB_SCOPE, github_open_prs: GITHUB_SCOPE };
+const ALL_SCOPES = [...new Set(Object.values(TOOL_SCOPES))];
 const MAX_BODY_BYTES = 1024 * 1024;
 
 function httpError(status, code, message) {
@@ -289,7 +291,7 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
         JSON.stringify({
           resource,
           authorization_servers: [issuer],
-          scopes_supported: [REPORT_SCOPE, GITHUB_SCOPE],
+          scopes_supported: ALL_SCOPES,
           bearer_methods_supported: ["header"],
         }),
       );
@@ -304,7 +306,7 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
     const result = await authenticate(req);
     if (result.error) {
       // The MCP authorization spec (Scope Selection Strategy) says the 401 SHOULD name the scopes to request.
-      const scopes = `scope="${[REPORT_SCOPE, GITHUB_SCOPE].join(" ")}"`;
+      const scopes = `scope="${ALL_SCOPES.join(" ")}"`;
       const challenge =
         result.error === "missing"
           ? `Bearer resource_metadata="${metadataUrl}", ${scopes}`

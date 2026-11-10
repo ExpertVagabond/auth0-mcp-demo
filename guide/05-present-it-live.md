@@ -108,3 +108,5 @@ Switch to the README and show the two token claim sets. If you have a verified t
 - **`npm run demo` won't start:** run `npm ci` again, then retry. `npm test` also runs the demo.
 - **Port or network issues:** the demo picks free local ports and needs no internet once installed.
 - **Out of time:** run `npm run demo` without `--step`. It finishes in a few seconds and the summary table says it all.
+
+Next: [Step 6: Build on it](06-build-on-it.md)
