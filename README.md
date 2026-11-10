@@ -2,6 +2,42 @@
 
 An MCP server that requires an OAuth 2.0 access token. Tokens are validated locally against the authorization server's JWKS. The server checks the issuer, the audience (the MCP resource identifier), and expiry. Tools can require a scope.
 
+**To reproduce it step by step**, with prerequisites, a no-account local path, the full Auth0 tenant setup and links to the official docs, see [REPRODUCE.md](REPRODUCE.md).
+
+## How a request flows
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Client as MCP client (agent)
+    participant Auth0
+    participant MCP as MCP server
+    participant API as Reports API
+    participant Vault as Token Vault (Auth0)
+    User->>Client: sign in
+    Client->>Auth0: authorization code + PKCE, resource = MCP server
+    Auth0-->>Client: access token (aud = MCP server)
+    Client->>MCP: tools/call read_report, Bearer token
+    MCP->>MCP: check issuer, signature, audience, expiry, scope
+    alt no token or wrong audience
+        MCP-->>Client: 401 + WWW-Authenticate (metadata URL)
+    else token lacks read:reports
+        MCP-->>Client: 403 insufficient_scope (names the scope)
+    else allowed
+        MCP->>Auth0: token exchange (RFC 8693, on-behalf-of), aud = reports API
+        Auth0-->>MCP: exchanged token (aud = reports API, same user)
+        MCP->>API: GET /reports/{week}, exchanged token
+        API-->>MCP: 200 report
+        MCP-->>Client: tool result
+    end
+    Note over MCP,API: The user's own token is never forwarded. The reports API answers 401 to it.
+    Client->>MCP: tools/call github_profile
+    MCP->>Vault: exchange the user's token for the linked GitHub token
+    Vault-->>MCP: GitHub access token (stays on the server)
+    MCP-->>Client: GitHub login only
+```
+
 ## Five-minute demo
 
 No Auth0 tenant or sign-in needed. This starts a mock issuer, the reports API and the MCP server on free local ports, then walks through six requests and prints the status of each:
