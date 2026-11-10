@@ -16,6 +16,7 @@ test("walkthrough runs all six steps and exits 0", async () => {
   });
   assert.equal(code, 0, `exit ${code}\n${stdout}\n${stderr}`);
   assert.match(stdout, /All 6 steps matched/);
-  assert.equal((stdout.match(/PASS {2}expected/g) ?? []).length, 6);
+  assert.equal((stdout.match(/^ {2}Result: .*PASS$/gm) ?? []).length, 6);
+  assert.equal((stdout.match(/^ {2}✓ {2}\d/gm) ?? []).length, 6);
   assert.doesNotMatch(stdout, /\x1b\[/, "no ANSI codes when stdout is not a TTY");
 });

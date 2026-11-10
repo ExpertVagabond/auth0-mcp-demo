@@ -1,49 +1,76 @@
-Auth0 MCP demo walkthrough (local, mock issuer, no tenant needed)
-  mock issuer  http://localhost:58080/
-  MCP server   http://localhost:58081/mcp   (resource https://reports.demo.test/)
-  reports API  http://localhost:58082   (audience https://reports-backend.demo.test/)
-  Tokens are real RS256 JWTs. The servers verify them against the mock issuer's JWKS, as they would against Auth0's.
+Auth0 MCP demo: who can call what, and what gets refused
 
-Step 1: no token
-  request:  POST http://localhost:58081/mcp   (no Authorization header)
-  response: 401
-  WWW-Authenticate: Bearer resource_metadata="http://localhost:58081/.well-known/oauth-protected-resource"
-  PASS  expected 401, got 401
-  Why it matters: The challenge tells a client where the protected-resource metadata is, so it can find the authorization server on its own.
+  Three local services are running:
+    issuer       stands in for Auth0 and signs real RS256 tokens   http://localhost:61013/
+    MCP server   the agent's tools, protected by those tokens      http://localhost:61014/mcp
+    reports API  a backend the MCP server calls for the user       http://localhost:61015
 
-Step 2: token for the wrong audience
-  request:  POST http://localhost:58081/mcp   Bearer eyJhbGciOiJSUzI1Ni...  (aud = https://someone-else.test/)
-  response: 401
-  WWW-Authenticate: Bearer error="invalid_token", resource_metadata="http://localhost:58081/.well-known/oauth-protected-resource"
-  PASS  expected 401, got 401
-  Why it matters: A validly signed token is still refused unless it was issued for this server, so a token meant for another API can't be replayed here.
+  Six requests follow. Steps 1-3 and 5-6 should be refused; step 4 is the one allowed path.
 
-Step 3: valid token without read:reports
-  request:  tools/call read_report {week: "2026-W43"}   Bearer eyJhbGciOiJSUzI1Ni...  (scope = "openid profile")
-  response: 403
-  WWW-Authenticate: Bearer error="insufficient_scope", scope="read:reports", resource_metadata="http://localhost:58081/.well-known/oauth-protected-resource"
-  PASS  expected 403, got 403
-  Why it matters: The user is authenticated but not authorized for this tool. The 403 names the missing scope so a client can ask for it.
+────────────────────────────────────────────────────────────────────────
+ STEP 1 of 6 · No token
+────────────────────────────────────────────────────────────────────────
+  Try:     Call the MCP server with no access token at all.
+  Send:    POST /mcp   (no Authorization header)
+  Result:  401 Unauthorized   PASS
+           WWW-Authenticate: Bearer resource_metadata="/.well-known/oauth-protected-resource"
+  Why:     The 401 points the client at the metadata, so it can find the authorization server itself.
 
-Step 4: valid token with read:reports, on-behalf-of exchange
-  request:  tools/call read_report {week: "2026-W43"}   Bearer eyJhbGciOiJSUzI1Ni...  (aud = https://reports.demo.test/)
-  MCP server -> issuer: RFC 8693 token exchange, audience https://reports-backend.demo.test/ for auth0|demo-user
-  MCP server -> reports API: GET /reports/2026-W43 with the exchanged token; it answered 200 (the report below came from it)
-  result:   Report for 2026-W43: build passed; tickets closed: AUTH-103
-  PASS  expected 200, got 200
-  Why it matters: The server swaps the user's token for one scoped to the reports API instead of forwarding it, so the backend sees a token meant for it.
+────────────────────────────────────────────────────────────────────────
+ STEP 2 of 6 · Wrong audience
+────────────────────────────────────────────────────────────────────────
+  Try:     Send a real, correctly signed token that was issued for a different API.
+  Send:    POST /mcp   Bearer <token>   aud = https://someone-else.test/
+  Result:  401 Unauthorized   error="invalid_token"   PASS
+  Why:     Signed isn't enough: the token must be issued for this server, so it can't be replayed here.
 
-Step 5: the user's MCP token sent straight to the reports API
-  request:  GET http://localhost:58082/reports/2026-W43   Bearer eyJhbGciOiJSUzI1Ni...  (aud = https://reports.demo.test/, holds read:reports)
-  response: 401  {"error":"invalid_token"}
-  PASS  expected 401, got 401
-  Why it matters: The backend rejects a token whose audience is the MCP server, so no token passthrough and no confused deputy: only the exchanged token works.
+────────────────────────────────────────────────────────────────────────
+ STEP 3 of 6 · Missing permission
+────────────────────────────────────────────────────────────────────────
+  Try:     Send a valid token for this server, but without read:reports, and call read_report.
+  Send:    tools/call read_report {week: "2026-W43"}   Bearer <token>   scope = "openid profile"
+  Result:  403 Forbidden   error="insufficient_scope"   scope="read:reports"   PASS
+  Why:     Known user, not allowed. The 403 names the missing scope, so the client knows what to ask for.
 
-Step 6: malformed JSON and an oversized body
-  request:  POST http://localhost:58081/mcp  body "{not json"  ->  400  {"jsonrpc":"2.0","error":{"code":-32700,"message":"parse error"},"id":null}
-  request:  POST http://localhost:58081/mcp  body of 1 MB + 16 KB (limit is 1 MB)  ->  413
-  follow-up: whoami on a fresh connection  ->  server still up, answered
-  PASS  expected 400 and 413, got 400 and 413
-  Why it matters: Bad input gets a clean error and the server keeps serving; it doesn't crash or buffer an unbounded body.
+────────────────────────────────────────────────────────────────────────
+ STEP 4 of 6 · Allowed: on-behalf-of token exchange
+────────────────────────────────────────────────────────────────────────
+  Try:     The same call, now with read:reports. Watch what the MCP server does for the user.
+  Send:    tools/call read_report {week: "2026-W43"}   Bearer <token>   aud = https://reports.demo.test/
+           1. MCP server checks issuer, signature, audience, expiry and the read:reports permission
+           2. MCP server -> issuer: token exchange (RFC 8693), new audience https://reports-backend.demo.test/
+              same user: auth0|demo-user
+           3. MCP server -> reports API: GET /reports/2026-W43 with the exchanged token
+  Result:  200 OK   "Report for 2026-W43: build passed; tickets closed: AUTH-103"   PASS
+  Why:     The user's token is never forwarded. The backend gets a token issued for it, for the same user.
 
+────────────────────────────────────────────────────────────────────────
+ STEP 5 of 6 · Token passthrough blocked
+────────────────────────────────────────────────────────────────────────
+  Try:     Skip the MCP server: send the user's MCP token straight to the reports API.
+  Send:    GET /reports/2026-W43 (reports API)   Bearer <token>   aud = https://reports.demo.test/, has read:reports
+  Result:  401 Unauthorized   {"error":"invalid_token"}   PASS
+  Why:     Only the exchanged token works. No token passthrough, no confused deputy.
+
+────────────────────────────────────────────────────────────────────────
+ STEP 6 of 6 · Bad input
+────────────────────────────────────────────────────────────────────────
+  Try:     Send broken JSON, then a body over the 1 MB limit, then check the server still answers.
+  Send:    POST /mcp   body "{not json"
+           POST /mcp   body of 1 MB + 16 KB
+           whoami on a fresh connection
+  Result:  400 Bad Request   (JSON-RPC parse error)   PASS
+           413 Payload Too Large
+           whoami answered: server still up
+  Why:     Clean, named errors, and the server keeps serving.
+
+────────────────────────────────────────────────────────────────────────
+ SUMMARY
+  ✓  1  No token                                401
+  ✓  2  Wrong audience                          401
+  ✓  3  Missing permission                      403
+  ✓  4  Allowed: on-behalf-of token exchange    200
+  ✓  5  Token passthrough blocked               401
+  ✓  6  Bad input                               400 and 413
+────────────────────────────────────────────────────────────────────────
 All 6 steps matched their expected status.

@@ -119,20 +119,30 @@ function waitForEnter() {
 
 const results = [];
 
+const RULE = "─".repeat(72);
+// One labelled line; continuation lines line up under the value.
+const field = (label, value) => value.split("\n").forEach((v, i) => out(`  ${i ? " ".repeat(9) : dim(label.padEnd(9))}${v}`));
+
+// Each step prints the same four parts, so a presenter can read it top to bottom:
+// Try (what we're about to do), Send (the request), Result (status + PASS/FAIL), Why (one line on what it proves).
 async function step(n, title, run) {
   out("");
-  out(bold(cyan(`Step ${n}: ${title}`)));
+  out(cyan(RULE));
+  out(bold(cyan(` STEP ${n} of 6 · ${title}`)));
+  out(cyan(RULE));
   let outcome;
   try {
     outcome = await run();
   } catch (err) {
-    outcome = { ok: false, lines: [`error: ${err.message}`], status: "error", expected: "n/a" };
+    outcome = { ok: false, try: "(step threw)", send: "", result: `error: ${err.message}`, status: "error", expected: "n/a", why: "" };
   }
-  for (const line of outcome.lines) out(`  ${line}`);
-  const mark = outcome.ok ? green("PASS") : red("FAIL");
-  out(`  ${mark}  expected ${outcome.expected}, got ${outcome.status}`);
-  out(`  ${dim("Why it matters: " + outcome.why)}`);
-  results.push({ n, title, ok: outcome.ok });
+  field("Try:", outcome.try);
+  field("Send:", outcome.send);
+  const mark = outcome.ok ? green("PASS") : red(`FAIL (expected ${outcome.expected}, got ${outcome.status})`);
+  const [first, ...rest] = outcome.result.split("\n");
+  field("Result:", [`${bold(first)}   ${mark}`, ...rest].join("\n"));
+  field("Why:", outcome.why);
+  results.push({ n, title, ok: outcome.ok, status: outcome.status });
   if (n < 6) await waitForEnter();
 }
 
@@ -156,12 +166,15 @@ async function main() {
   await new Promise((r) => reportsServer.listen(reportsPort, r));
   await new Promise((r) => mcpServer.listen(mcpPort, r));
 
-  out(bold("Auth0 MCP demo walkthrough (local, mock issuer, no tenant needed)"));
-  out(dim(`  mock issuer  ${issuer}`));
-  out(dim(`  MCP server   ${mcpUrl}   (resource ${RESOURCE})`));
-  out(dim(`  reports API  ${reportsUrl}   (audience ${REPORTS_AUD})`));
-  out(dim("  Tokens are real RS256 JWTs. The servers verify them against the mock issuer's JWKS, as they would against Auth0's."));
-  if (stepMode) out(dim("  Step mode: press Enter to move on."));
+  out(bold("Auth0 MCP demo: who can call what, and what gets refused"));
+  out("");
+  out(`  Three local services are running:`);
+  out(`    ${bold("issuer")}       stands in for Auth0 and signs real RS256 tokens   ${dim(issuer)}`);
+  out(`    ${bold("MCP server")}   the agent's tools, protected by those tokens      ${dim(mcpUrl)}`);
+  out(`    ${bold("reports API")}  a backend the MCP server calls for the user       ${dim(reportsUrl)}`);
+  out("");
+  out(`  Six requests follow. Steps 1-3 and 5-6 should be refused; step 4 is the one allowed path.`);
+  if (stepMode) out(dim("  Press Enter to start, then Enter after each step."));
   await waitForEnter();
 
   const initialize = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "walkthrough", version: "0" } } });
@@ -171,46 +184,54 @@ async function main() {
     ...(token ? { authorization: `Bearer ${token}` } : {}),
   });
   const callTool = (id, name, args) => JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } });
-  const shortToken = (t) => `${t.slice(0, 18)}...`;
+  // Show headers with the local origin removed, so lines stay short on a shared screen.
+  const local = (s) => s.replaceAll(`http://localhost:${mcpPort}`, "").replaceAll(`http://localhost:${reportsPort}`, "");
 
   // 1. No token.
-  await step(1, "no token", async () => {
+  await step(1, "No token", async () => {
     const res = await post(mcpUrl, mcpHeaders(), initialize);
     const challenge = res.headers["www-authenticate"] ?? "(none)";
     const ok = res.status === 401 && /resource_metadata="[^"]*\/\.well-known\/oauth-protected-resource"/.test(challenge);
     return {
       ok, status: res.status, expected: 401,
-      lines: [`request:  POST ${mcpUrl}   (no Authorization header)`, `response: ${res.status}`, `WWW-Authenticate: ${challenge}`],
-      why: "The challenge tells a client where the protected-resource metadata is, so it can find the authorization server on its own.",
+      try: "Call the MCP server with no access token at all.",
+      send: "POST /mcp   (no Authorization header)",
+      result: `${res.status} Unauthorized\nWWW-Authenticate: ${local(challenge)}`,
+      why: "The 401 points the client at the metadata, so it can find the authorization server itself.",
     };
   });
 
   // 2. Wrong audience.
-  await step(2, "token for the wrong audience", async () => {
+  await step(2, "Wrong audience", async () => {
     const token = await mock.sign({ aud: "https://someone-else.test/", scope: "read:reports" });
     const res = await post(mcpUrl, mcpHeaders(token), initialize);
     const challenge = res.headers["www-authenticate"] ?? "(none)";
     return {
       ok: res.status === 401 && /invalid_token/.test(challenge), status: res.status, expected: 401,
-      lines: [`request:  POST ${mcpUrl}   Bearer ${shortToken(token)}  (aud = https://someone-else.test/)`, `response: ${res.status}`, `WWW-Authenticate: ${challenge}`],
-      why: "A validly signed token is still refused unless it was issued for this server, so a token meant for another API can't be replayed here.",
+      try: "Send a real, correctly signed token that was issued for a different API.",
+      send: "POST /mcp   Bearer <token>   aud = https://someone-else.test/",
+      result: `${res.status} Unauthorized   error="invalid_token"`,
+      why: "Signed isn't enough: the token must be issued for this server, so it can't be replayed here.",
     };
   });
 
   // 3. Valid token, missing scope.
-  await step(3, "valid token without read:reports", async () => {
+  await step(3, "Missing permission", async () => {
     const token = await mock.sign({ scope: "openid profile" });
     const res = await post(mcpUrl, mcpHeaders(token), callTool(2, "read_report", { week: "2026-W43" }));
     const challenge = res.headers["www-authenticate"] ?? "(none)";
+    const named = /scope="([^"]+)"/.exec(challenge)?.[1] ?? "(none)";
     return {
       ok: res.status === 403 && /error="insufficient_scope", scope="read:reports"/.test(challenge), status: res.status, expected: 403,
-      lines: [`request:  tools/call read_report {week: "2026-W43"}   Bearer ${shortToken(token)}  (scope = "openid profile")`, `response: ${res.status}`, `WWW-Authenticate: ${challenge}`],
-      why: "The user is authenticated but not authorized for this tool. The 403 names the missing scope so a client can ask for it.",
+      try: "Send a valid token for this server, but without read:reports, and call read_report.",
+      send: `tools/call read_report {week: "2026-W43"}   Bearer <token>   scope = "openid profile"`,
+      result: `${res.status} Forbidden   error="insufficient_scope"   scope="${named}"`,
+      why: "Known user, not allowed. The 403 names the missing scope, so the client knows what to ask for.",
     };
   });
 
   // 4. Valid token with scope: OBO exchange.
-  await step(4, "valid token with read:reports, on-behalf-of exchange", async () => {
+  await step(4, "Allowed: on-behalf-of token exchange", async () => {
     const token = await mock.sign({ scope: "openid read:reports", permissions: ["read:reports"], sub: "auth0|demo-user" });
     const before = mock.exchanges.length;
     const client = new Client({ name: "walkthrough", version: "0.1.0" });
@@ -223,29 +244,34 @@ async function main() {
     const ok = result.isError !== true && /Report for 2026-W43/.test(text) && exchanged;
     return {
       ok, status: ok ? 200 : "failed", expected: 200,
-      lines: [
-        `request:  tools/call read_report {week: "2026-W43"}   Bearer ${shortToken(token)}  (aud = ${RESOURCE})`,
-        `MCP server -> issuer: RFC 8693 token exchange, audience ${exchange?.audience ?? "(none)"} for ${exchange?.sub ?? "(none)"}`,
-        `MCP server -> reports API: GET /reports/2026-W43 with the exchanged token; it answered 200 (the report below came from it)`,
-        `result:   ${text}`,
-      ],
-      why: "The server swaps the user's token for one scoped to the reports API instead of forwarding it, so the backend sees a token meant for it.",
+      try: "The same call, now with read:reports. Watch what the MCP server does for the user.",
+      send: [
+        `tools/call read_report {week: "2026-W43"}   Bearer <token>   aud = ${RESOURCE}`,
+        `1. MCP server checks issuer, signature, audience, expiry and the read:reports permission`,
+        `2. MCP server -> issuer: token exchange (RFC 8693), new audience ${exchange?.audience ?? "(none)"}`,
+        `   same user: ${exchange?.sub ?? "(none)"}`,
+        `3. MCP server -> reports API: GET /reports/2026-W43 with the exchanged token`,
+      ].join("\n"),
+      result: `200 OK   "${text}"`,
+      why: "The user's token is never forwarded. The backend gets a token issued for it, for the same user.",
     };
   });
 
   // 5. User's MCP token straight to the reports API.
-  await step(5, "the user's MCP token sent straight to the reports API", async () => {
+  await step(5, "Token passthrough blocked", async () => {
     const token = await mock.sign({ scope: "read:reports", permissions: ["read:reports"], aud: RESOURCE });
     const res = await fetch(`${reportsUrl}/reports/2026-W43`, { headers: { authorization: `Bearer ${token}` } });
     return {
       ok: res.status === 401, status: res.status, expected: 401,
-      lines: [`request:  GET ${reportsUrl}/reports/2026-W43   Bearer ${shortToken(token)}  (aud = ${RESOURCE}, holds read:reports)`, `response: ${res.status}  ${await res.text()}`],
-      why: "The backend rejects a token whose audience is the MCP server, so no token passthrough and no confused deputy: only the exchanged token works.",
+      try: "Skip the MCP server: send the user's MCP token straight to the reports API.",
+      send: `GET /reports/2026-W43 (reports API)   Bearer <token>   aud = ${RESOURCE}, has read:reports`,
+      result: `${res.status} Unauthorized   ${await res.text()}`,
+      why: "Only the exchanged token works. No token passthrough, no confused deputy.",
     };
   });
 
   // 6. Malformed JSON and oversized body.
-  await step(6, "malformed JSON and an oversized body", async () => {
+  await step(6, "Bad input", async () => {
     const token = await mock.sign({ scope: "read:reports" });
     const bad = await post(mcpUrl, mcpHeaders(token), "{not json");
     const big = await postOversized(mcpUrl, mcpHeaders(token), 1024 * 1024 + 16 * 1024);
@@ -257,16 +283,18 @@ async function main() {
     return {
       ok: bad.status === 400 && big.status === 413 && stillUp,
       status: `${bad.status} and ${big.status}`, expected: "400 and 413",
-      lines: [
-        `request:  POST ${mcpUrl}  body "{not json"  ->  ${bad.status}  ${bad.text}`,
-        `request:  POST ${mcpUrl}  body of 1 MB + 16 KB (limit is 1 MB)  ->  ${big.status}`,
-        `follow-up: whoami on a fresh connection  ->  ${stillUp ? "server still up, answered" : "no answer"}`,
-      ],
-      why: "Bad input gets a clean error and the server keeps serving; it doesn't crash or buffer an unbounded body.",
+      try: "Send broken JSON, then a body over the 1 MB limit, then check the server still answers.",
+      send: [`POST /mcp   body "{not json"`, `POST /mcp   body of 1 MB + 16 KB`, `whoami on a fresh connection`].join("\n"),
+      result: [`${bad.status} Bad Request   (JSON-RPC parse error)`, `${big.status} Payload Too Large`, stillUp ? "whoami answered: server still up" : "whoami: no answer"].join("\n"),
+      why: "Clean, named errors, and the server keeps serving.",
     };
   });
 
   out("");
+  out(cyan(RULE));
+  out(bold(" SUMMARY"));
+  for (const r of results) out(`  ${r.ok ? green("✓") : red("✗")}  ${String(r.n)}  ${r.title.padEnd(40)}${r.status}`);
+  out(cyan(RULE));
   const failed = results.filter((r) => !r.ok);
   if (failed.length === 0) out(bold(green(`All ${results.length} steps matched their expected status.`)));
   else out(bold(red(`${failed.length} of ${results.length} steps did not match: ${failed.map((r) => r.n).join(", ")}`)));
