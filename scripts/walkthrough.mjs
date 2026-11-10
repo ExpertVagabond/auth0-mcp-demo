@@ -13,7 +13,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createMcpApp } from "../server.mjs";
 import { createReportsApi } from "../reports-api.mjs";
-import { createMockIssuer, closeServer, freePorts, RESOURCE, REPORTS_AUD, OBO_CLIENT_ID, OBO_CLIENT_SECRET } from "../test/mock-issuer.mjs";
+import { createMockIssuer, closeServer, freePorts, REPORTS_AUD, OBO_CLIENT_ID, OBO_CLIENT_SECRET } from "../test/mock-issuer.mjs";
 
 const jsonMode = process.argv.includes("--json");
 const stepMode = process.argv.includes("--step") && !jsonMode;
@@ -150,15 +150,15 @@ async function step(n, title, run) {
 
 async function main() {
   const [issuerPort, mcpPort, reportsPort] = await freePorts(3);
-  const mock = await createMockIssuer({ port: issuerPort });
-  const issuer = mock.issuer;
   const mcpUrl = `http://localhost:${mcpPort}/mcp`;
+  const mock = await createMockIssuer({ port: issuerPort, resource: mcpUrl });
+  const issuer = mock.issuer;
   const reportsUrl = `http://localhost:${reportsPort}`;
 
   const reportsServer = createReportsApi({ issuer, audience: REPORTS_AUD });
   const mcpServer = createMcpApp({
     issuer,
-    resource: RESOURCE,
+    resource: mcpUrl,
     port: mcpPort,
     reports: { url: reportsUrl },
     exchange: { tokenUrl: new URL("oauth/token", issuer).href, clientId: OBO_CLIENT_ID, clientSecret: OBO_CLIENT_SECRET, audience: REPORTS_AUD },
@@ -193,7 +193,9 @@ async function main() {
   await step(1, "No token", async () => {
     const res = await post(mcpUrl, mcpHeaders(), initialize);
     const challenge = res.headers["www-authenticate"] ?? "(none)";
-    const ok = res.status === 401 && /resource_metadata="[^"]*\/\.well-known\/oauth-protected-resource"/.test(challenge);
+    const metadataUrl = /resource_metadata="([^"]+)"/.exec(challenge)?.[1];
+    const metadata = metadataUrl ? await (await fetch(metadataUrl)).json() : {};
+    const ok = res.status === 401 && metadata.resource === mcpUrl && metadata.authorization_servers?.includes(issuer);
     return {
       ok, status: res.status, expected: 401,
       try: "Call the MCP server with no access token at all.",
@@ -234,7 +236,8 @@ async function main() {
 
   // 4. Valid token with scope: OBO exchange.
   await step(4, "Allowed: on-behalf-of token exchange", async () => {
-    const token = await mock.sign({ scope: "openid read:reports", permissions: ["read:reports"], sub: "auth0|demo-user" });
+    const subject = "auth0|demo-user";
+    const token = await mock.sign({ scope: "openid read:reports", permissions: ["read:reports"], sub: subject });
     const before = mock.exchanges.length;
     const client = new Client({ name: "walkthrough", version: "0.1.0" });
     await client.connect(new StreamableHTTPClientTransport(new URL(mcpUrl), { requestInit: { headers: { Authorization: `Bearer ${token}` } } }));
@@ -242,16 +245,17 @@ async function main() {
     await client.close();
     const text = result.content?.[0]?.text ?? "";
     const exchange = mock.exchanges[mock.exchanges.length - 1];
-    const exchanged = mock.exchanges.length - before === 1 && exchange?.audience === REPORTS_AUD;
+    const exchanged = mock.exchanges.length - before === 1 && exchange?.audience === REPORTS_AUD && exchange.sub === subject;
     const ok = result.isError !== true && /Report for 2026-W43/.test(text) && exchanged;
     return {
       ok, status: ok ? 200 : "failed", expected: 200,
       try: "The same call, now with read:reports. Watch what the MCP server does for the user.",
       send: [
-        `tools/call read_report {week: "2026-W43"}   Bearer <token>   aud = ${RESOURCE}`,
+        `tools/call read_report {week: "2026-W43"}   Bearer <token>   aud = ${mcpUrl}`,
         `1. MCP server checks issuer, signature, audience, expiry and the read:reports permission`,
-        `2. MCP server -> issuer: token exchange (RFC 8693), new audience ${exchange?.audience ?? "(none)"}`,
-        `   same user: ${exchange?.sub ?? "(none)"}`,
+        "2. MCP server -> issuer: on-behalf-of token exchange (RFC 8693)",
+        `   audience: ${mcpUrl} -> ${exchange?.audience ?? "(none)"}`,
+        `   subject:  ${subject} -> ${exchange?.sub ?? "(none)"}`,
         `3. MCP server -> reports API: GET /reports/2026-W43 with the exchanged token`,
       ].join("\n"),
       result: `200 OK   "${text}"`,
@@ -261,14 +265,14 @@ async function main() {
 
   // 5. User's MCP token straight to the reports API.
   await step(5, "Token passthrough blocked", async () => {
-    const token = await mock.sign({ scope: "read:reports", permissions: ["read:reports"], aud: RESOURCE });
+    const token = await mock.sign({ scope: "read:reports", permissions: ["read:reports"], aud: mcpUrl });
     const res = await fetch(`${reportsUrl}/reports/2026-W43`, { headers: { authorization: `Bearer ${token}` } });
     return {
       ok: res.status === 401, status: res.status, expected: 401,
       try: "Skip the MCP server: send the user's MCP token straight to the reports API.",
-      send: `GET /reports/2026-W43 (reports API)   Bearer <token>   aud = ${RESOURCE}, has read:reports`,
+      send: `GET /reports/2026-W43 (reports API)   Bearer <token>   aud = ${mcpUrl}, has read:reports`,
       result: `${res.status} Unauthorized   ${await res.text()}`,
-      why: "Only the exchanged token works. No token passthrough, no confused deputy.",
+      why: "The reports API checks audience before permission. The original token still targets the MCP server.",
     };
   });
 

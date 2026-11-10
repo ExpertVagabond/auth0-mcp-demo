@@ -33,11 +33,11 @@ The browser opens GitHub's consent screen. Approve it, and the script completes 
 
 ## 5. Check the GitHub tools
 
-With both servers running (step 3), sign in again and call the tools:
+Add `read:github` to `LOGIN_SCOPE` in `.env`. With both servers running (step 3), sign in again and require the GitHub checks:
 
 ```bash
 npm run login
-npm run check
+npm run check -- --github
 ```
 
 ```

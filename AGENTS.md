@@ -9,7 +9,7 @@ git clone https://github.com/ExpertVagabond/mcp-agent-identity-auth0.git
 cd mcp-agent-identity-auth0
 npm ci
 npm run doctor          # preflight: exit 0 means ready
-npm test                # expect: tests 23, pass 23, fail 0
+npm test                # expect: fail 0
 npm run demo -- --json  # machine-readable result
 npm run verify          # all three in one: prints VERIFIED and exits 0
 ```
@@ -36,7 +36,7 @@ Follow [guide/02-set-up-auth0.md](guide/02-set-up-auth0.md) and [guide/03-run-ag
 | Start the backend | `npm run start:api` (long-running, port 3100) | Agent, in the background |
 | Start the MCP server | `npm start` (long-running, port 3000) | Agent, in the background |
 | Sign in | `LOGIN_NO_BROWSER=1 npm run login`, then give the person the printed URL | **Person** signs in. The script waits up to 10 minutes and exits 0 when the token is saved |
-| Call every tool | `npm run check` | Agent |
+| Check the core tools | `npm run check` (add `-- --github` to require Token Vault) | Agent |
 | Check no passthrough | `curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(cat .tokens/user-token)" http://localhost:3100/reports/2026-W43` returns `401` | Agent |
 
 **Live success** means `npm run check` prints a report for `read_report` (proof of the on-behalf-of exchange), and the passthrough check returns `401`. The GitHub tools also need [guide step 4](guide/04-token-vault.md).
@@ -47,7 +47,7 @@ Stop both servers when you're done.
 
 - **Never commit `.env` or `.tokens/`.** Git ignores both. Don't print secrets or tokens. The scripts save tokens without printing them, and so should you.
 - **Never print a full Auth0 application object.** Application objects can include signing keys.
-- The identifiers `https://reports.demo.test/` and `https://reports-backend.demo.test/` are fixtures. A user's tenant may use others. Read them from `.env`.
+- Read API identifiers from `.env`. Use the same URL for `MCP_RESOURCE` and `MCP_URL` when testing discovery. Older fixture identifiers can still be used for saved-token checks.
 - If something fails, check [guide/troubleshooting.md](guide/troubleshooting.md) first. It maps each real error to its fix.
 
 ## Changing this repo

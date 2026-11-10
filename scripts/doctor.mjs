@@ -49,10 +49,14 @@ if (!existsSync(`${root}.env`)) {
   }
 
   for (const k of ["MCP_RESOURCE", "REPORTS_AUDIENCE"]) {
-    if (e[k] && !/^https?:\/\/[^\s#]+$/.test(e[k])) add("FAIL", k, `"${e[k]}" is not an absolute URI`, "Use the API identifier exactly as created in Auth0, e.g. https://reports.demo.test/");
+    if (e[k] && !/^https?:\/\/[^\s#]+$/.test(e[k])) add("FAIL", k, `"${e[k]}" is not an absolute URI`, "Use the API identifier exactly as created in Auth0 (guide step 2)");
   }
   if (e.MCP_RESOURCE && e.MCP_RESOURCE === e.REPORTS_AUDIENCE) {
     add("FAIL", "identifiers", "MCP_RESOURCE and REPORTS_AUDIENCE are the same", "They are two different APIs (guide steps 2.2 and 2.3)");
+  }
+  const endpoint = e.MCP_URL ?? `http://localhost:${e.PORT ?? 3000}/mcp`;
+  if (e.MCP_RESOURCE && e.MCP_RESOURCE !== endpoint) {
+    add("WARN", "MCP discovery", "MCP_RESOURCE differs from the client endpoint. Saved-token checks can still run.", "Use the same canonical MCP endpoint for MCP_RESOURCE, MCP_URL, and the Auth0 API identifier (guide step 2.2)");
   }
 
   if (e.AUTH0_DOMAIN && !missing.includes("AUTH0_DOMAIN")) {

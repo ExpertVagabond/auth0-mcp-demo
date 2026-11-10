@@ -33,7 +33,7 @@ Creating the exchange client with the on-behalf-of profile as a regular app fail
 
 ## 8. Exchanged tokens have no `scope` claim (confirmed live)
 A user token from the login flow has `scope` and `permissions`. The exchanged token has `permissions` only. An API that checks `scope` will refuse every exchanged token, and nothing in the quickstart says so. The reports API checks `permissions` for this reason.
-**Would help:** say which claim each token type carries, in a table.
+**Would help:** show the incoming and exchanged token claims side by side in the quickstart. The [README example](../README.md#follow-one-report-request) is a draft of that explanation. In a fresh-tenant workshop, measure time from setup start to the first successful `read_report`, and record which errors blocked progress. Compare runs with and without the claims table.
 
 ## 9. Setting up a user login takes four separate Auth0 steps (confirmed live)
 A signed-in user has no role until one is assigned. A role assigned after login only shows up in a new token. The first token had `permissions: []`. The fix was: assign the role, then log in again. I didn't find the second login in the docs I read.

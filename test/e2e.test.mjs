@@ -5,7 +5,14 @@
 
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createMcpApp } from "../server.mjs";
 import { createReportsApi } from "../reports-api.mjs";
@@ -13,7 +20,8 @@ import {
   createMockIssuer,
   createGithubStub,
   closeServer,
-  RESOURCE,
+  LOGIN_CLIENT_ID,
+  LOGIN_REDIRECT,
   REPORTS_AUD,
   OBO_CLIENT_ID,
   OBO_CLIENT_SECRET,
@@ -33,7 +41,7 @@ let reportsServer;
 let githubStub;
 
 before(async () => {
-  mockIssuer = await createMockIssuer({ port: ISSUER_PORT });
+  mockIssuer = await createMockIssuer({ port: ISSUER_PORT, resource: MCP_URL });
   sign = mockIssuer.sign;
   await mockIssuer.start();
 
@@ -46,7 +54,7 @@ before(async () => {
 
   mcpServer = createMcpApp({
     issuer: ISSUER,
-    resource: RESOURCE,
+    resource: MCP_URL,
     port: MCP_PORT,
     reports: { url: `http://localhost:${REPORTS_PORT}` },
     exchange: {
@@ -83,10 +91,10 @@ async function rawPost(headers = {}) {
 }
 
 test("protected-resource metadata names the resource and issuer", async () => {
-  const res = await fetch(`http://localhost:${MCP_PORT}/.well-known/oauth-protected-resource`);
+  const res = await fetch(`http://localhost:${MCP_PORT}/.well-known/oauth-protected-resource/mcp`);
   assert.equal(res.status, 200);
   const body = await res.json();
-  assert.equal(body.resource, RESOURCE);
+  assert.equal(body.resource, MCP_URL);
   assert.deepEqual(body.authorization_servers, [ISSUER]);
   assert.deepEqual(body.scopes_supported, ["read:reports", "read:github"]);
 });
@@ -95,7 +103,43 @@ test("no token: 401 with a resource_metadata challenge", async () => {
   const res = await rawPost();
   assert.equal(res.status, 401);
   const challenge = res.headers.get("www-authenticate");
-  assert.match(challenge, /^Bearer resource_metadata="http:\/\/localhost:4102\/\.well-known\/oauth-protected-resource", scope="read:reports read:github"$/);
+  assert.match(challenge, /^Bearer resource_metadata="http:\/\/localhost:4102\/\.well-known\/oauth-protected-resource\/mcp", scope="read:reports read:github"$/);
+});
+
+test("a fresh SDK client discovers OAuth, completes PKCE, and reads a report", async () => {
+  let tokens;
+  let authorizationUrl;
+  let verifier;
+  const authProvider = {
+    redirectUrl: LOGIN_REDIRECT,
+    clientMetadata: { redirect_uris: [LOGIN_REDIRECT], token_endpoint_auth_method: "none" },
+    clientInformation: () => ({ client_id: LOGIN_CLIENT_ID, issuer: ISSUER }),
+    state: () => "fixture-state",
+    tokens: () => tokens,
+    saveTokens: (value) => { tokens = value; },
+    redirectToAuthorization: (url) => { authorizationUrl = url; },
+    saveCodeVerifier: (value) => { verifier = value; },
+    codeVerifier: () => verifier,
+  };
+  const transport = new StreamableHTTPClientTransport(new URL(MCP_URL), { authProvider });
+  const client = new Client({ name: "fresh-client", version: "1" });
+  try {
+    await assert.rejects(client.connect(transport), UnauthorizedError);
+    assert.equal(authorizationUrl.searchParams.get("resource"), MCP_URL);
+    const authorization = await fetch(authorizationUrl, { redirect: "manual" });
+    assert.equal(authorization.status, 302);
+    const callback = new URL(authorization.headers.get("location"));
+    assert.equal(callback.searchParams.get("state"), "fixture-state");
+    assert.equal(callback.searchParams.get("iss"), ISSUER);
+    await transport.finishAuth(callback.searchParams.get("code"));
+    await client.connect(new StreamableHTTPClientTransport(new URL(MCP_URL), { authProvider }));
+    const report = await client.callTool({ name: "read_report", arguments: { week: "2026-W43" } });
+    assert.notEqual(report.isError, true);
+    assert.match(report.content[0].text, /Report for 2026-W43/);
+  } finally {
+    await client.close();
+    await transport.close();
+  }
 });
 
 test("wrong audience is rejected", async () => {
@@ -115,6 +159,53 @@ test("expired token is rejected", async () => {
   const token = await sign({ expiresIn: "-1m" });
   const res = await rawPost({ authorization: `Bearer ${token}` });
   assert.equal(res.status, 401);
+});
+
+for (const [claim, options] of [["missing expiry", { expiresIn: null }], ["missing subject", { sub: null }], ["blank subject", { sub: " " }]]) {
+  test(`both services reject a signed token with ${claim}`, async () => {
+    const mcpToken = await sign(options);
+    const reportsToken = await sign({ ...options, aud: REPORTS_AUD, permissions: ["read:reports"] });
+    const [mcp, reports] = await Promise.all([
+      rawPost({ authorization: `Bearer ${mcpToken}` }),
+      fetch(`http://localhost:${REPORTS_PORT}/reports/2026-W43`, { headers: { authorization: `Bearer ${reportsToken}` } }),
+    ]);
+    assert.equal(mcp.status, 401);
+    assert.equal(reports.status, 401);
+  });
+}
+
+test("live check exits nonzero when exchange fails and requires GitHub only with --github", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "mcp-live-check-"));
+  const tokenPath = join(dir, "fixture");
+  const run = promisify(execFile);
+  const options = { env: { ...process.env, MCP_URL, TOKEN_FILE: tokenPath }, timeout: 10_000 };
+  const script = fileURLToPath(new URL("../scripts/live-check.mjs", import.meta.url));
+  try {
+    await writeFile(tokenPath, await sign({ scope: "read:reports", permissions: ["read:reports"] }), { mode: 0o600 });
+    const core = await run(process.execPath, [script], options);
+    assert.match(core.stdout, /read_report: Report/);
+    assert.doesNotMatch(core.stdout, /^github_profile:/m);
+    await assert.rejects(run(process.execPath, [script, "--github"], options), (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /github_profile: ERROR/);
+      return true;
+    });
+    // This MCP instance has no exchange configured, so the tool returns an MCP error result.
+    const noExchange = createMcpApp({ issuer: ISSUER, resource: MCP_URL, port: MCP_PORT });
+    await new Promise((resolve) => noExchange.listen(0, resolve));
+    try {
+      options.env.MCP_URL = `http://localhost:${noExchange.address().port}/mcp`;
+      await assert.rejects(run(process.execPath, [script], options), (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stderr, /read_report: ERROR.*token exchange is not configured/);
+        return true;
+      });
+    } finally {
+      await closeServer(noExchange);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("valid token without read:reports: whoami works, read_report is refused", async () => {
@@ -222,7 +313,7 @@ test("reports API refuses a missing token, a token for the wrong audience, and o
   const url = `http://localhost:${REPORTS_PORT}/reports/2026-W43`;
   assert.equal((await fetch(url)).status, 401);
 
-  const wrongAud = await sign({ aud: RESOURCE, permissions: ["read:reports"] });
+  const wrongAud = await sign({ aud: MCP_URL, permissions: ["read:reports"] });
   assert.equal((await fetch(url, { headers: { authorization: `Bearer ${wrongAud}` } })).status, 401);
 
   const noPermission = await sign({ aud: REPORTS_AUD, scope: "openid" });

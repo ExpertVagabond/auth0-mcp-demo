@@ -49,5 +49,5 @@ cp .env.example .env
 | `npm run start:api` | The reports API on port 3100 |
 | `npm start` | The MCP server on port 3000 |
 | `npm run login` | Browser sign-in; saves your access token to `.tokens/` |
-| `npm run check` | Calls every tool on the running server with that token |
+| `npm run check` | Checks `whoami` and `read_report` with that token. Add `-- --github` to also require Token Vault |
 | `npm run connect:github` | Links a GitHub account for Token Vault (step 4) |

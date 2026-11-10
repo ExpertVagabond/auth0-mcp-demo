@@ -1,9 +1,9 @@
 Auth0 MCP demo: who can call what, and what gets refused
 
   Three local services are running:
-    issuer       stands in for Auth0 and signs real RS256 tokens   http://localhost:63026/
-    MCP server   the agent's tools, protected by those tokens      http://localhost:63027/mcp
-    reports API  a backend the MCP server calls for the user       http://localhost:63028
+    issuer       stands in for Auth0 and signs real RS256 tokens   http://localhost:36047/
+    MCP server   the agent's tools, protected by those tokens      http://localhost:45913/mcp
+    reports API  a backend the MCP server calls for the user       http://localhost:33051
 
   Six requests follow. Requests 1-3 and 5-6 should be refused; request 4 is the one allowed path.
 
@@ -13,7 +13,7 @@ Auth0 MCP demo: who can call what, and what gets refused
   Try:     Call the MCP server with no access token at all.
   Send:    POST /mcp   (no Authorization header)
   Result:  401 Unauthorized   PASS
-           WWW-Authenticate: Bearer resource_metadata="/.well-known/oauth-protected-resource", scope="read:reports read:github"
+           WWW-Authenticate: Bearer resource_metadata="/.well-known/oauth-protected-resource/mcp", scope="read:reports read:github"
   Why:     The 401 points the client at the metadata and names the scopes to ask for, so it can log in by itself.
 
 ────────────────────────────────────────────────────────────────────────
@@ -36,10 +36,11 @@ Auth0 MCP demo: who can call what, and what gets refused
  REQUEST 4 of 6 · Allowed: on-behalf-of token exchange
 ────────────────────────────────────────────────────────────────────────
   Try:     The same call, now with read:reports. Watch what the MCP server does for the user.
-  Send:    tools/call read_report {week: "2026-W43"}   Bearer <token>   aud = https://reports.demo.test/
+  Send:    tools/call read_report {week: "2026-W43"}   Bearer <token>   aud = http://localhost:45913/mcp
            1. MCP server checks issuer, signature, audience, expiry and the read:reports permission
-           2. MCP server -> issuer: token exchange (RFC 8693), new audience https://reports-backend.demo.test/
-              same user: auth0|demo-user
+           2. MCP server -> issuer: on-behalf-of token exchange (RFC 8693)
+              audience: http://localhost:45913/mcp -> https://reports-backend.demo.test/
+              subject:  auth0|demo-user -> auth0|demo-user
            3. MCP server -> reports API: GET /reports/2026-W43 with the exchanged token
   Result:  200 OK   "Report for 2026-W43: build passed; tickets closed: AUTH-103"   PASS
   Why:     The user's token is never forwarded. The backend gets a token issued for it, for the same user.
@@ -48,9 +49,9 @@ Auth0 MCP demo: who can call what, and what gets refused
  REQUEST 5 of 6 · Token passthrough blocked
 ────────────────────────────────────────────────────────────────────────
   Try:     Skip the MCP server: send the user's MCP token straight to the reports API.
-  Send:    GET /reports/2026-W43 (reports API)   Bearer <token>   aud = https://reports.demo.test/, has read:reports
+  Send:    GET /reports/2026-W43 (reports API)   Bearer <token>   aud = http://localhost:45913/mcp, has read:reports
   Result:  401 Unauthorized   {"error":"invalid_token"}   PASS
-  Why:     Only the exchanged token works. No token passthrough, no confused deputy.
+  Why:     The reports API checks audience before permission. The original token still targets the MCP server.
 
 ────────────────────────────────────────────────────────────────────────
  REQUEST 6 of 6 · Bad input

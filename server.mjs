@@ -26,7 +26,7 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
   // issuer must end with "/" to match Auth0's iss claim exactly.
   const jwks = createRemoteJWKSet(new URL(".well-known/jwks.json", issuer));
   const base = publicBase ?? `http://localhost:${port}`;
-  const metadataUrl = `${base}/.well-known/oauth-protected-resource`;
+  const metadataUrl = `${base}/.well-known/oauth-protected-resource/mcp`;
 
   async function authenticate(req) {
     const header = req.headers.authorization ?? "";
@@ -35,9 +35,11 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
       const { payload } = await jwtVerify(header.slice(7), jwks, {
         issuer,
         audience: resource,
+        requiredClaims: ["exp", "sub"],
       });
+      if (typeof payload.sub !== "string" || !payload.sub.trim()) return { error: "invalid_token" };
       // `scope` is what the client was granted. `permissions` (Auth0 RBAC) is what the user holds.
-      // A permission counts only when both claims carry it. Without a `scope` claim nothing is granted.
+      // When both claims are present, a permission must be in both. Without `scope`, nothing is granted.
       const granted = typeof payload.scope === "string" ? payload.scope.split(" ") : [];
       const held = Array.isArray(payload.permissions)
         ? payload.permissions.filter((p) => typeof p === "string")
@@ -345,11 +347,12 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
   return httpServer;
 }
 
-// Run directly: AUTH0_ISSUER, MCP_RESOURCE, PORT, and optionally REPORTS_API_URL and REPORTS_API_KEY.
+// Run directly: AUTH0_ISSUER, MCP_RESOURCE, PORT, and optionally MCP_URL and REPORTS_API_URL.
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const issuer = process.env.AUTH0_ISSUER;
   const resource = process.env.MCP_RESOURCE;
   const port = Number(process.env.PORT ?? 3000);
+  const publicBase = new URL(process.env.MCP_URL ?? `http://localhost:${port}/mcp`).origin;
   if (!issuer || !resource) {
     console.error("Set AUTH0_ISSUER (e.g. https://YOUR-TENANT.us.auth0.com/) and MCP_RESOURCE (API identifier).");
     process.exit(1);
@@ -365,7 +368,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
         }
       : undefined;
   const github = exchange ? { connection: "github", apiUrl: process.env.GITHUB_API_URL ?? "https://api.github.com" } : undefined;
-  createMcpApp({ issuer, resource, port, reports, exchange, github }).listen(port, () => {
+  createMcpApp({ issuer, resource, port, publicBase, reports, exchange, github }).listen(port, () => {
     console.log(`MCP server on http://localhost:${port}/mcp, issuer ${issuer}, resource ${resource}`);
   });
 }

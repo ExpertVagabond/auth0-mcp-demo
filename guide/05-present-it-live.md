@@ -9,10 +9,10 @@ About five minutes. One terminal, one command, six requests. Each request on scr
    ```bash
    git clone https://github.com/ExpertVagabond/mcp-agent-identity-auth0.git
    cd mcp-agent-identity-auth0
-   npm install
+   npm ci
    ```
 
-2. Do one full practice run: `npm run demo`. It should end with `All 6 requests matched their expected status.`
+2. Run `npm run verify`, then rehearse with `npm run demo -- --step`. Expect all six requests to pass.
 3. Make the terminal font large (about 18 pt) and the window wide enough that lines don't wrap.
 4. Clear the screen: `clear`.
 5. Keep two browser tabs ready: this repo's [README](../README.md), which has the request-flow diagram, and the [guide](README.md).
@@ -38,7 +38,7 @@ Press **Enter**.
 
 ### Request 1: No token (expect 401)
 
-You'll see `401 Unauthorized` and a `WWW-Authenticate` header pointing at `/.well-known/oauth-protected-resource`.
+You'll see `401 Unauthorized` and a `WWW-Authenticate` header pointing at `/.well-known/oauth-protected-resource/mcp`.
 
 > "No token, so a 401. The useful part is the header. It tells the client where to find the metadata, and from there the authorization server, and it names the scopes to ask for. That's what the current MCP spec asks for, so a client can work out how to log in on its own."
 
@@ -66,13 +66,13 @@ You'll see the three numbered lines under **Send**, then `200 OK` and the report
 
 > "Same call, now with the permission. Watch the three numbered lines. One: the server checks the token. Two: it doesn't forward the user's token. It exchanges it with Auth0 for a new token, issued for the reports API, for the same user. That's on-behalf-of token exchange, RFC 8693. Three: it calls the backend with that new token. The backend sees a token meant for it, with the user's identity intact."
 
-Point at: `new audience https://reports-backend.demo.test/` and `same user: auth0|demo-user`. Press **Enter**.
+Point at the two before-and-after lines. The audience changes to the reports API. The subject stays `auth0|demo-user`. Press **Enter**.
 
 ### Request 5: Token passthrough blocked (expect 401)
 
 You'll see `401 Unauthorized   {"error":"invalid_token"}`.
 
-> "What if someone skips the MCP server and sends the user's token straight to the backend? Refused. The backend only accepts tokens issued for it. That's what stops token passthrough and the confused-deputy problem."
+> "What if someone sends the original token straight to the backend? It gets a 401, even with read:reports. The backend checks audience before permission, so a token issued to the MCP server cannot be reused here."
 
 Press **Enter**.
 
@@ -88,7 +88,7 @@ The summary table shows six ticks.
 
 > "Six requests, five refusals with a named reason, one allowed path that never forwards the user's token. The same server also reaches GitHub through Token Vault, so the GitHub token never leaves the server. Building it gave me a friction list for Auth0's docs and errors, which is in the repo under docs."
 
-If there's time, switch to the README tab and show the request-flow diagram.
+Switch to the README and show the two token claim sets. If you have a verified tenant recording, play the redacted `read_report` and `github_profile` excerpts. Have the [verification log](../docs/VERIFICATION.md) open for follow-up questions.
 
 ## Likely questions
 
@@ -99,12 +99,12 @@ If there's time, switch to the README tab and show the request-flow diagram.
 | 401 vs 403? | 401: we don't know who you are, or the token isn't for us. 403: we know who you are, you lack the permission, and we name the one you need. |
 | How does Token Vault fit? | The GitHub tool exchanges the user's token for the linked GitHub token inside the server. The agent gets the result, never the GitHub credential. |
 | What would you improve in Auth0? | [docs/FRICTION.md](../docs/FRICTION.md). Two examples: on-behalf-of errors that don't name the misconfigured client binding, and dynamically registered clients that can't use social logins. |
-| Does it follow the latest MCP spec? | Checked against the 2026-07-28 authorization spec in [docs/MCP-SPEC-CHECK.md](../docs/MCP-SPEC-CHECK.md). Every server MUST and SHOULD passes. The sign-in helper does PKCE, sends `resource`, and validates `iss` per RFC 9207. The next step is moving from a pre-registered client to a Client ID Metadata Document, since dynamic registration is now deprecated. |
+| Does it follow the latest MCP spec? | The [spec check](../docs/MCP-SPEC-CHECK.md) lists the covered behaviors. A fresh SDK client follows discovery, exchanges a code with PKCE, and calls a tool against the local issuer. The verification log distinguishes that test from the earlier saved-token Auth0 run. |
 | How would you teach this? | This exact sequence as a workshop: one allowed call and five refusals, each with a named reason, then the same build against a real tenant. |
 
 ## If something breaks
 
 - **A step shows FAIL:** say what it expected, keep going, and show the saved run afterwards: [`docs/walkthrough-output.txt`](../docs/walkthrough-output.txt).
-- **`npm run demo` won't start:** run `npm install` again, then retry. `npm test` (23 tests) proves the same behaviour.
+- **`npm run demo` won't start:** run `npm ci` again, then retry. `npm test` also runs the demo.
 - **Port or network issues:** the demo picks free local ports and needs no internet once installed.
 - **Out of time:** run `npm run demo` without `--step`. It finishes in a few seconds and the summary table says it all.

@@ -32,8 +32,8 @@ const verifier = randomBytes(48).toString("base64url");
 const challenge = createHash("sha256").update(verifier).digest("base64url");
 const state = randomBytes(16).toString("base64url");
 
-// The MCP spec requires the `resource` parameter (RFC 8707) on authorization requests. AUTH_PARAM=audience
-// is kept only to compare the two; both produce the same aud claim here (the Resource Parameter Compatibility Profile is on).
+// The MCP spec requires `resource` (RFC 8707) on authorization and token requests.
+// AUTH_PARAM=audience preserves the Auth0-specific comparison flow.
 const targetParam = process.env.AUTH_PARAM === "audience" ? "audience" : "resource";
 
 const authorize = new URL(`https://${domain}/authorize`);
@@ -79,6 +79,7 @@ const server = createServer(async (req, res) => {
         code: url.searchParams.get("code"),
         code_verifier: verifier,
         redirect_uri: redirectUri,
+        ...(targetParam === "resource" ? { resource: audience } : {}),
         // Confidential clients (Token Vault) also authenticate with their secret.
         ...(clientSecret ? { client_secret: clientSecret } : {}),
       }),
