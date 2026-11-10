@@ -24,11 +24,11 @@ jobs:
         run: npm run doctor
       - name: Tests
         run: npm test
-      - name: Demo (all six steps must match)
+      - name: Demo (all six requests must match)
         run: |
           npm run demo > demo-output.txt
           npm run -s demo -- --json > demo-result.json
-          node -e 'const r = require("./demo-result.json"); console.log(`${r.passed}/${r.total} steps matched`); process.exit(r.ok ? 0 : 1)'
+          node -e 'const r = require("./demo-result.json"); console.log(`${r.passed}/${r.total} requests matched`); process.exit(r.ok ? 0 : 1)'
       - uses: actions/upload-artifact@v4
         if: always()
         with:

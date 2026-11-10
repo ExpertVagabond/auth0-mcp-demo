@@ -5,15 +5,42 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org/)
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ExpertVagabond/auth0-mcp-demo)
 
-An MCP server for AI agents, protected by Auth0. It shows who can call which tool, and how everything else is refused:
+One MCP server, protected by Auth0, and one story: **who can call which tool, and how everything else is refused.**
 
 - Every access token is checked: issuer, signature, audience, expiry, and a permission per tool.
 - To call a backend for the user, the server **exchanges** the user's token (on-behalf-of) instead of forwarding it.
 - It reaches GitHub through **Token Vault**, so the user's GitHub token never leaves the server.
 
-Run the whole story locally in two minutes with no account, then connect the same server to a real Auth0 tenant. It was verified live on 2026-10-21 and rechecked end to end on 2026-11-10.
+![The demo running in a terminal](docs/demo.gif)
 
-![The six-step demo running in a terminal](docs/demo.gif)
+## One demo, two ways to run it
+
+The server code (`server.mjs`) and the backend (`reports-api.mjs`) are the same in both. Only the authorization server changes.
+
+| | **Local** | **Live** |
+|---|---|---|
+| Authorization server | A stand-in on your machine that signs real RS256 tokens | Your Auth0 tenant |
+| You need | Node.js 22 and git | Plus a free Auth0 account and a browser sign-in |
+| First run | 2 minutes | About 20 minutes, mostly tenant setup |
+| Command | `npm run demo` | `npm start`, `npm run login`, `npm run check` |
+| Guide | [Step 1](guide/01-run-locally.md) | [Steps 2 and 3](guide/02-set-up-auth0.md), plus [step 4](guide/04-token-vault.md) for GitHub |
+
+Start local. Go live when you want to see it against Auth0. Verified live on 2026-10-21 and rechecked end to end on 2026-11-10.
+
+## The six requests
+
+The demo sends six requests. Five are refused with a named reason, and one is allowed:
+
+| # | Request | Result | What it proves | Live check |
+|---|---|---|---|---|
+| 1 | No token | **401** + where to log in, and which scopes | A client can discover the authorization server itself | ✅ |
+| 2 | A real token, issued for another API | **401** | Signed isn't enough; it must be issued for *this* server | — |
+| 3 | Valid token, missing `read:reports` | **403**, names the scope | Known user, not allowed, told exactly what's missing | — |
+| 4 | Valid token with `read:reports` | **200** after a token exchange | The backend gets its own token for the same user | ✅ `npm run check` |
+| 5 | The user's token sent straight to the backend | **401** | No token passthrough, no confused deputy | ✅ |
+| 6 | Broken JSON, then a body over 1 MB | **400**, **413** | Clean errors, and the server keeps running | — |
+
+"Live check" marks what [step 3](guide/03-run-against-auth0.md) shows against a real tenant. Requests 2, 3 and 6 need forged tokens or inputs, so they run locally only. Token Vault (the GitHub tools) is live only.
 
 ## Related content
 
@@ -22,52 +49,39 @@ Run the whole story locally in two minutes with no account, then connect the sam
 - [Token Vault](https://auth0.com/docs/secure/call-apis-on-users-behalf/token-vault): calling third-party APIs for the user.
 - [MCP authorization specification](https://modelcontextprotocol.io/specification/latest/basic/authorization): what MCP clients and servers must do.
 
-## Steps
+## Guide
 
-| Step | Guide | What you get |
+| Step | Guide | |
 |---|---|---|
-| 0 | [Prerequisites](guide/00-prerequisites.md) | Node.js and git; an Auth0 account for steps 2 to 4 |
-| 1 | [Run the demo locally](guide/01-run-locally.md) | Six requests, five refused with a named reason, one allowed. No account |
-| 2 | [Set up Auth0](guide/02-set-up-auth0.md) | Two APIs, a role, a login app and a token-exchange app in your tenant |
-| 3 | [Run against Auth0](guide/03-run-against-auth0.md) | Real sign-in, a live on-behalf-of exchange, and passthrough refused |
-| 4 | [Add GitHub through Token Vault](guide/04-token-vault.md) | The GitHub tools, with the GitHub token kept on the server |
-| 5 | [Present it live](guide/05-present-it-live.md) | A five-minute script: what to type, what appears, what to say |
+| 0 | [Prerequisites](guide/00-prerequisites.md) | |
+| 1 | [Run it locally](guide/01-run-locally.md) | **Local** |
+| 2 | [Set up Auth0](guide/02-set-up-auth0.md) | **Live** |
+| 3 | [Run it against Auth0](guide/03-run-against-auth0.md) | **Live** |
+| 4 | [Add GitHub through Token Vault](guide/04-token-vault.md) (optional) | **Live** |
+| 5 | [Present it](guide/05-present-it-live.md): a five-minute script | Local |
 
-Stuck? See [Troubleshooting](guide/troubleshooting.md).
+Stuck? Run `npm run doctor`, then see [Troubleshooting](guide/troubleshooting.md).
 
 ## Requirements
 
 - [Node.js](https://nodejs.org/en/download) 22 or later, and npm
 - [git](https://git-scm.com)
-- An [Auth0](https://auth0.com/signup) account and tenant (from step 2)
-- A [GitHub OAuth app](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) you own (step 4 only)
+- For live: an [Auth0](https://auth0.com/signup) account and tenant
+- For GitHub through Token Vault: a [GitHub OAuth app](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app) you own
 
-Step 1 only needs Node.js and git.
-
-## Download and run
+## Download and run (local)
 
 ```bash
 git clone https://github.com/ExpertVagabond/auth0-mcp-demo.git
 cd auth0-mcp-demo
 npm install
 npm run doctor           # preflight: checks Node, dependencies and (later) your Auth0 settings
-npm run demo -- --step
+npm run demo -- --step   # press Enter to move through the six requests
 ```
 
-Or open it in [GitHub Codespaces](https://codespaces.new/ExpertVagabond/auth0-mcp-demo) and run `npm run demo -- --step` there.
+Or open it in [GitHub Codespaces](https://codespaces.new/ExpertVagabond/auth0-mcp-demo) and run the same commands there.
 
 **Using a coding agent?** Point it at [AGENTS.md](AGENTS.md). It has exact commands and success criteria, and `npm run demo -- --json` gives a machine-readable result.
-
-Press **Enter** to move through the six steps:
-
-| # | What it tries | Result | What it proves |
-|---|---|---|---|
-| 1 | No token | **401** + where to log in | A client can discover the authorization server itself |
-| 2 | A real token, issued for another API | **401** | Signed isn't enough; it must be issued for *this* server |
-| 3 | Valid token, missing `read:reports` | **403**, names the scope | Known user, not allowed, told exactly what's missing |
-| 4 | Valid token with `read:reports` | **200** after a token exchange | The backend gets its own token for the same user |
-| 5 | The user's token sent straight to the backend | **401** | No token passthrough, no confused deputy |
-| 6 | Broken JSON, then a body over 1 MB | **400**, **413** | Clean errors, and the server keeps running |
 
 Run the tests with `npm test` (23 tests).
 

@@ -11,17 +11,18 @@ npm ci
 npm run doctor          # preflight: exit 0 means ready
 npm test                # expect: tests 23, pass 23, fail 0
 npm run demo -- --json  # machine-readable result
+npm run verify          # all three in one: prints VERIFIED and exits 0
 ```
 
 **Success** is all of:
 
 1. `npm run doctor` exits 0. Without a `.env` it reports `INFO .env not found`, which is expected.
 2. `npm test` exits 0 with `fail 0`.
-3. `npm run demo -- --json` exits 0 and prints `"ok": true, "passed": 6, "total": 6`. The step statuses, in order, are `401, 401, 403, 200, 401, "400 and 413"`.
+3. `npm run demo -- --json` exits 0 and prints `"ok": true, "passed": 6, "total": 6`. The request statuses, in order, are `401, 401, 403, 200, 401, "400 and 413"`.
 
 Requirements: Node.js 22 or later (see `.nvmrc`) and npm. No network access is needed after `npm ci`. The demo uses free local ports and stops its own servers.
 
-Don't use `npm run demo -- --step` unattended. It waits for Enter between steps.
+Don't use `npm run demo -- --step` unattended. It waits for Enter between requests.
 
 ## Reproduce against a real Auth0 tenant (needs a person)
 

@@ -29,9 +29,9 @@ Stuck? See [Troubleshooting](troubleshooting.md). It lists every real error hit 
                                Reports API   (refuses the user's own token: 401)
 ```
 
-- **Steps 1 and 3:** the server refuses a missing token or a token for another API (401), and a known user without the tool's permission (403, naming the scope).
-- **Step 3:** for the allowed call, the server exchanges the user's token for one issued to the reports API, instead of forwarding it.
-- **Step 4:** the GitHub tools reach GitHub through Token Vault. The GitHub token never leaves the server.
+- **Local and live:** the server refuses a missing token or a token for another API (401), and a known user without the tool's permission (403, naming the scope).
+- **Local and live:** for the allowed call, the server exchanges the user's token for one issued to the reports API, instead of forwarding it.
+- **Live, step 4:** the GitHub tools reach GitHub through Token Vault. The GitHub token never leaves the server.
 
 ## One configuration file
 

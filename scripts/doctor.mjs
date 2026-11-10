@@ -21,8 +21,8 @@ const portFree = (port) =>
 
 // 1. Node version
 const major = Number(process.versions.node.split(".")[0]);
-if (major >= 22) add("PASS", "node", `Node ${process.versions.node}`);
-else add("FAIL", "node", `Node ${process.versions.node}`, "Install Node.js 22 or later: https://nodejs.org/en/download");
+if (major >= 22) add("PASS", "node", `Node ${process.versions.node} (22 or later required)`);
+else add("FAIL", "node", `Node ${process.versions.node} (22 or later required)`, "Install Node.js 22 or later: https://nodejs.org/en/download");
 
 // 2. Dependencies
 const deps = ["@modelcontextprotocol/sdk", "jose", "zod"].filter((d) => !existsSync(`${root}node_modules/${d}/package.json`));
@@ -30,7 +30,7 @@ if (deps.length === 0) add("PASS", "dependencies", "installed");
 else add("FAIL", "dependencies", `missing: ${deps.join(", ")}`, "Run: npm install");
 
 // 3. Local demo needs nothing else
-add("INFO", "local demo", "ready once the two checks above pass", "Run: npm run demo");
+add("INFO", "local demo", "ready once the two checks above pass", "Run: npm run verify (doctor + tests + demo), or npm run demo");
 
 // 4+. Auth0 steps. Load .env here too, so `node scripts/doctor.mjs` works without npm's --env-file.
 if (existsSync(`${root}.env`)) process.loadEnvFile(`${root}.env`);

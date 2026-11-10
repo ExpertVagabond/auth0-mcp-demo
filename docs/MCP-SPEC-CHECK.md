@@ -8,12 +8,12 @@ How this server lines up with the [MCP authorization specification](https://mode
 |---|---|---|
 | Servers **MUST** implement Protected Resource Metadata (RFC 9728) | `GET /.well-known/oauth-protected-resource` returns `resource`, `authorization_servers`, `scopes_supported`, `bearer_methods_supported` | ✅ |
 | The 401 **SHOULD** carry `resource_metadata` and the `scope` to request | `Bearer resource_metadata="…", scope="read:reports read:github"` | ✅ (scope added 2026-11-10) |
-| Servers **MUST** validate that tokens were issued for them (audience, RFC 8707) | Issuer, signature, audience and expiry are checked against the issuer's JWKS. Demo step 2 shows a wrong-audience token refused | ✅ |
+| Servers **MUST** validate that tokens were issued for them (audience, RFC 8707) | Issuer, signature, audience and expiry are checked against the issuer's JWKS. Demo request 2 shows a wrong-audience token refused | ✅ |
 | Invalid or expired tokens **MUST** get a 401 | 401 with `error="invalid_token"` | ✅ |
-| Insufficient scope **SHOULD** get a 403 with `error="insufficient_scope"`, `scope` and `resource_metadata` | `Bearer error="insufficient_scope", scope="read:reports", resource_metadata="…"`. Demo step 3 | ✅ |
-| Servers **MUST NOT** accept or transit any other tokens | The user's token is never forwarded. The server exchanges it (on-behalf-of) and the reports API refuses the original (demo step 5, live 401 on 2026-11-10) | ✅ |
+| Insufficient scope **SHOULD** get a 403 with `error="insufficient_scope"`, `scope` and `resource_metadata` | `Bearer error="insufficient_scope", scope="read:reports", resource_metadata="…"`. Demo request 3 | ✅ |
+| Servers **MUST NOT** accept or transit any other tokens | The user's token is never forwarded. The server exchanges it (on-behalf-of) and the reports API refuses the original (demo request 5, live 401 on 2026-11-10) | ✅ |
 | Tokens go in the `Authorization` header only, never the query string | Header only (`bearer_methods_supported: ["header"]`) | ✅ |
-| Bad requests get clear status codes | 400 for malformed JSON, 413 for oversized bodies (demo step 6) | ✅ |
+| Bad requests get clear status codes | 400 for malformed JSON, 413 for oversized bodies (demo request 6) | ✅ |
 | `offline_access` **SHOULD NOT** appear in `scopes_supported` or the challenge | Not present | ✅ |
 
 ## The sign-in helper (`scripts/login-check.mjs`, a client)

@@ -1,6 +1,6 @@
 # Step 5: Present it live
 
-About five minutes. One terminal, one command, six steps. Each step on screen has the same four lines: **Try** (what we're about to do), **Send** (the request), **Result** (status and PASS), **Why** (what it proves). Read them top to bottom.
+About five minutes. One terminal, one command, six requests. Each request on screen has the same four lines: **Try** (what we're about to do), **Send** (the request), **Result** (status and PASS), **Why** (what it proves). Read them top to bottom.
 
 ## Before the call (5 minutes, once)
 
@@ -12,7 +12,7 @@ About five minutes. One terminal, one command, six steps. Each step on screen ha
    npm install
    ```
 
-2. Do one full practice run: `npm run demo`. It should end with `All 6 steps matched their expected status.`
+2. Do one full practice run: `npm run demo`. It should end with `All 6 requests matched their expected status.`
 3. Make the terminal font large (about 18 pt) and the window wide enough that lines don't wrap.
 4. Clear the screen: `clear`.
 5. Keep two browser tabs ready: this repo's [README](../README.md), which has the request-flow diagram, and the [guide](README.md).
@@ -30,13 +30,13 @@ Type:
 npm run demo -- --step
 ```
 
-You'll see the three services and one line: *steps 1-3 and 5-6 should be refused; step 4 is the one allowed path.*
+You'll see the three services and one line: *requests 1-3 and 5-6 should be refused; request 4 is the one allowed path.*
 
 > "Five ways to be refused, one way to get in. Let's try to break it."
 
 Press **Enter**.
 
-### Step 1: No token (expect 401)
+### Request 1: No token (expect 401)
 
 You'll see `401 Unauthorized` and a `WWW-Authenticate` header pointing at `/.well-known/oauth-protected-resource`.
 
@@ -44,7 +44,7 @@ You'll see `401 Unauthorized` and a `WWW-Authenticate` header pointing at `/.wel
 
 Point at: the `resource_metadata` value. Press **Enter**.
 
-### Step 2: Wrong audience (expect 401)
+### Request 2: Wrong audience (expect 401)
 
 You'll see `401 Unauthorized   error="invalid_token"`.
 
@@ -52,7 +52,7 @@ You'll see `401 Unauthorized   error="invalid_token"`.
 
 Point at: `aud = https://someone-else.test/`. Press **Enter**.
 
-### Step 3: Missing permission (expect 403)
+### Request 3: Missing permission (expect 403)
 
 You'll see `403 Forbidden   error="insufficient_scope"   scope="read:reports"`.
 
@@ -60,7 +60,7 @@ You'll see `403 Forbidden   error="insufficient_scope"   scope="read:reports"`.
 
 Point at: `scope="read:reports"`. Press **Enter**.
 
-### Step 4: Allowed, with on-behalf-of exchange (expect 200)
+### Request 4: Allowed, with on-behalf-of exchange (expect 200)
 
 You'll see the three numbered lines under **Send**, then `200 OK` and the report text.
 
@@ -68,7 +68,7 @@ You'll see the three numbered lines under **Send**, then `200 OK` and the report
 
 Point at: `new audience https://reports-backend.demo.test/` and `same user: auth0|demo-user`. Press **Enter**.
 
-### Step 5: Token passthrough blocked (expect 401)
+### Request 5: Token passthrough blocked (expect 401)
 
 You'll see `401 Unauthorized   {"error":"invalid_token"}`.
 
@@ -76,7 +76,7 @@ You'll see `401 Unauthorized   {"error":"invalid_token"}`.
 
 Press **Enter**.
 
-### Step 6: Bad input (expect 400 and 413)
+### Request 6: Bad input (expect 400 and 413)
 
 You'll see `400 Bad Request`, `413 Payload Too Large`, then `whoami answered: server still up`.
 

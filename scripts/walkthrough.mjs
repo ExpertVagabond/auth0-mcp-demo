@@ -110,7 +110,7 @@ function waitForEnter() {
       while (waiting.length) waiting.shift()();
     });
   }
-  process.stdout.write(dim("  [Enter for the next step] "));
+  process.stdout.write(dim("  [Enter for the next request] "));
   if (queuedLines.length) {
     queuedLines.shift();
     out("");
@@ -130,7 +130,7 @@ const field = (label, value) => value.split("\n").forEach((v, i) => out(`  ${i ?
 async function step(n, title, run) {
   out("");
   out(cyan(RULE));
-  out(bold(cyan(` STEP ${n} of 6 · ${title}`)));
+  out(bold(cyan(` REQUEST ${n} of 6 · ${title}`)));
   out(cyan(RULE));
   let outcome;
   try {
@@ -175,8 +175,8 @@ async function main() {
   out(`    ${bold("MCP server")}   the agent's tools, protected by those tokens      ${dim(mcpUrl)}`);
   out(`    ${bold("reports API")}  a backend the MCP server calls for the user       ${dim(reportsUrl)}`);
   out("");
-  out(`  Six requests follow. Steps 1-3 and 5-6 should be refused; step 4 is the one allowed path.`);
-  if (stepMode) out(dim("  Press Enter to start, then Enter after each step."));
+  out(`  Six requests follow. Requests 1-3 and 5-6 should be refused; request 4 is the one allowed path.`);
+  if (stepMode) out(dim("  Press Enter to start, then Enter after each request."));
   await waitForEnter();
 
   const initialize = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "walkthrough", version: "0" } } });
@@ -298,9 +298,9 @@ async function main() {
   for (const r of results) out(`  ${r.ok ? green("✓") : red("✗")}  ${String(r.n)}  ${r.title.padEnd(40)}${r.status}`);
   out(cyan(RULE));
   const failed = results.filter((r) => !r.ok);
-  if (jsonMode) process.stdout.write(`${JSON.stringify({ ok: failed.length === 0, passed: results.length - failed.length, total: results.length, steps: results }, null, 2)}\n`);
-  if (failed.length === 0) out(bold(green(`All ${results.length} steps matched their expected status.`)));
-  else out(bold(red(`${failed.length} of ${results.length} steps did not match: ${failed.map((r) => r.n).join(", ")}`)));
+  if (jsonMode) process.stdout.write(`${JSON.stringify({ ok: failed.length === 0, passed: results.length - failed.length, total: results.length, requests: results }, null, 2)}\n`);
+  if (failed.length === 0) out(bold(green(`All ${results.length} requests matched their expected status.`)));
+  else out(bold(red(`${failed.length} of ${results.length} requests did not match: ${failed.map((r) => r.n).join(", ")}`)));
   return failed.length === 0 ? 0 : 1;
 }
 

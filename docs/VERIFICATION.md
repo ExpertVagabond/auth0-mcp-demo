@@ -13,7 +13,7 @@ What has been checked against a live Auth0 development tenant, and when. The ten
 | `github_open_prs` through Token Vault | Passed: returned the user's open public pull requests |
 | The user's token sent straight to the reports API | Refused, 401 |
 | A machine-to-machine token | `whoami` passed. The exchange refused it with `The user is not found`, as it should: on-behalf-of needs a user |
-| Local suite and demo | 23 tests passing; all six demo steps matched; CI green |
+| Local suite and demo | 23 tests passing; all six demo requests matched; CI green |
 
 ## 2026-10-21: first live run
 
