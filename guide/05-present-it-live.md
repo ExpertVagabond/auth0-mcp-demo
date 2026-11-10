@@ -1,4 +1,4 @@
-# Presenting the demo live
+# Step 5: Present it live
 
 About five minutes. One terminal, one command, six steps. Each step on screen has the same four lines: **Try** (what we're about to do), **Send** (the request), **Result** (status and PASS), **Why** (what it proves). Read them top to bottom.
 
@@ -15,7 +15,7 @@ About five minutes. One terminal, one command, six steps. Each step on screen ha
 2. Do one full practice run: `npm run demo`. It should end with `All 6 steps matched their expected status.`
 3. Make the terminal font large (about 18 pt) and the window wide enough that lines don't wrap.
 4. Clear the screen: `clear`.
-5. Keep two browser tabs ready: this repo's README (it has the request-flow diagram) and [REPRODUCE.md](REPRODUCE.md).
+5. Keep two browser tabs ready: this repo's [README](../README.md), which has the request-flow diagram, and the [guide](README.md).
 6. Share the terminal **window**, not the whole screen.
 
 ## Run of show
@@ -40,7 +40,7 @@ Press **Enter**.
 
 You'll see `401 Unauthorized` and a `WWW-Authenticate` header pointing at `/.well-known/oauth-protected-resource`.
 
-> "No token, so a 401. The useful part is the header: it tells the client where to find the metadata, and from there the authorization server. The MCP spec requires that, so a client can discover how to log in on its own."
+> "No token, so a 401. The useful part is the header. It tells the client where to find the metadata, and from there the authorization server, and it names the scopes to ask for. That's what the current MCP spec asks for, so a client can work out how to log in on its own."
 
 Point at: the `resource_metadata` value. Press **Enter**.
 
@@ -86,7 +86,7 @@ You'll see `400 Bad Request`, `413 Payload Too Large`, then `whoami answered: se
 
 The summary table shows six ticks.
 
-> "Six requests, five refusals with a named reason, one allowed path that never forwards the user's token. The same server also reaches GitHub through Token Vault, so the GitHub token never leaves the server. Building it gave me a friction list for Auth0's docs and errors, which is in FRICTION.md."
+> "Six requests, five refusals with a named reason, one allowed path that never forwards the user's token. The same server also reaches GitHub through Token Vault, so the GitHub token never leaves the server. Building it gave me a friction list for Auth0's docs and errors, which is in the repo under docs."
 
 If there's time, switch to the README tab and show the request-flow diagram.
 
@@ -94,16 +94,17 @@ If there's time, switch to the README tab and show the request-flow diagram.
 
 | They ask | Short answer |
 |---|---|
-| Is this real Auth0? | The demo uses a local issuer so it runs anywhere. The same server was verified against a live Auth0 tenant on Oct 21: browser login, on-behalf-of exchange, Token Vault. REPRODUCE.md has the setup. |
+| Is this real Auth0? | The demo uses a local issuer so it runs anywhere. The same server runs against a live Auth0 tenant. I verified it on Oct 21 and again on Nov 10: browser login, on-behalf-of exchange, Token Vault, passthrough refused. Guide steps 2 and 3 have the setup. |
 | Why exchange instead of forwarding the token? | A forwarded token's audience is the MCP server, so the backend can't trust it and shouldn't. Exchange gives the backend a token issued for it, for the same user, with narrower reach. The MCP spec forbids passthrough. |
 | 401 vs 403? | 401: we don't know who you are, or the token isn't for us. 403: we know who you are, you lack the permission, and we name the one you need. |
 | How does Token Vault fit? | The GitHub tool exchanges the user's token for the linked GitHub token inside the server. The agent gets the result, never the GitHub credential. |
-| What would you improve in Auth0? | FRICTION.md. Two examples: on-behalf-of errors that don't name the misconfigured client binding, and dynamically registered clients that can't use social logins. |
+| What would you improve in Auth0? | [docs/FRICTION.md](../docs/FRICTION.md). Two examples: on-behalf-of errors that don't name the misconfigured client binding, and dynamically registered clients that can't use social logins. |
+| Does it follow the latest MCP spec? | Checked against the 2026-07-28 authorization spec in [docs/MCP-SPEC-CHECK.md](../docs/MCP-SPEC-CHECK.md). Every server MUST and SHOULD passes. One open item is client-side: the sign-in helper doesn't validate `iss` yet. The next step is moving from a pre-registered client to a Client ID Metadata Document, since dynamic registration is now deprecated. |
 | How would you teach this? | This exact sequence as a workshop: one allowed call and five refusals, each with a named reason, then the same build against a real tenant. |
 
 ## If something breaks
 
-- **A step shows FAIL:** say what it expected, keep going, and show the saved run afterwards: [`docs/walkthrough-output.txt`](docs/walkthrough-output.txt).
+- **A step shows FAIL:** say what it expected, keep going, and show the saved run afterwards: [`docs/walkthrough-output.txt`](../docs/walkthrough-output.txt).
 - **`npm run demo` won't start:** run `npm install` again, then retry. `npm test` (23 tests) proves the same behaviour.
 - **Port or network issues:** the demo picks free local ports and needs no internet once installed.
 - **Out of time:** run `npm run demo` without `--step`. It finishes in a few seconds and the summary table says it all.

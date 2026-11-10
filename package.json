@@ -1,16 +1,26 @@
 {
   "name": "auth0-mcp-demo",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "node --test test/e2e.test.mjs test/walkthrough.test.mjs",
-    "demo": "node scripts/walkthrough.mjs"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "description": "An MCP server protected by Auth0: per-tool permissions, on-behalf-of token exchange and Token Vault, with a six-step demo of the allowed and refused paths.",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "demo": "node scripts/walkthrough.mjs",
+    "test": "node --test test/e2e.test.mjs test/walkthrough.test.mjs",
+    "start": "node --env-file-if-exists=.env server.mjs",
+    "start:api": "node --env-file-if-exists=.env reports-api.mjs",
+    "login": "node --env-file-if-exists=.env scripts/login-check.mjs",
+    "check": "node --env-file-if-exists=.env scripts/live-check.mjs",
+    "connect:github": "node --env-file-if-exists=.env scripts/connect-github.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ExpertVagabond/auth0-mcp-demo.git"
+  },
+  "author": "Matthew Karsten",
+  "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "jose": "^6.2.13",

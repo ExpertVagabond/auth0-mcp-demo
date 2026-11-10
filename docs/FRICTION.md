@@ -3,7 +3,7 @@
 Written while building this server. Each entry says what got in the way and what would help. Entries marked **provisional** were found against a local mock issuer, not a live Auth0 tenant. Confirm them before reporting them.
 
 ## 1. Getting an account to build against is the first step (confirmed)
-When this entry was first written, there was no Auth0 tenant on this machine, so the server couldn't be checked against the real service. A development tenant was set up later, and the live checks run against it are listed in the README's status section. The free-tier limits were hard to confirm (see 2).
+When this entry was first written, there was no Auth0 tenant on this machine, so the server couldn't be checked against the real service. A development tenant was set up later, and the live checks run against it are listed in the [verification log](VERIFICATION.md). The free-tier limits were hard to confirm (see 2).
 **Would help:** a sandbox tenant that doesn't need a credit card, or a published local dev issuer for MCP auth.
 
 ## 2. Free-tier limits are unclear from the public pages (confirmed)
@@ -53,4 +53,4 @@ A client created through dynamic client registration is third-party and strict. 
 **Would help:** say in the DCR docs that registered clients are third-party and can't use social connections, and point to the pre-registered-client option.
 
 ## Next step for this log
-The on-behalf-of flow and browser login are now verified live (see README). Items 6 to 9 come from that run. Items 4 and 5 are confirmed by live tokens. Item 3 is checked against the MCP spec, though not against an Auth0 example.
+The on-behalf-of flow and browser login are now verified live (see the [verification log](VERIFICATION.md)). Items 6 to 9 come from that run. Items 4 and 5 are confirmed by live tokens. Item 3 is checked against the MCP spec, though not against an Auth0 example.

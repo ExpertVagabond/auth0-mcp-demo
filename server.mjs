@@ -301,10 +301,12 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
 
     const result = await authenticate(req);
     if (result.error) {
+      // The MCP authorization spec (Scope Selection Strategy) says the 401 SHOULD name the scopes to request.
+      const scopes = `scope="${[REPORT_SCOPE, GITHUB_SCOPE].join(" ")}"`;
       const challenge =
         result.error === "missing"
-          ? `Bearer resource_metadata="${metadataUrl}"`
-          : `Bearer error="invalid_token", resource_metadata="${metadataUrl}"`;
+          ? `Bearer resource_metadata="${metadataUrl}", ${scopes}`
+          : `Bearer error="invalid_token", resource_metadata="${metadataUrl}", ${scopes}`;
       res.writeHead(401, { "www-authenticate": challenge, "content-type": "application/json" });
       res.end(JSON.stringify({ error: result.error, detail: result.detail }));
       return;

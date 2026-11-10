@@ -197,7 +197,7 @@ async function main() {
       try: "Call the MCP server with no access token at all.",
       send: "POST /mcp   (no Authorization header)",
       result: `${res.status} Unauthorized\nWWW-Authenticate: ${local(challenge)}`,
-      why: "The 401 points the client at the metadata, so it can find the authorization server itself.",
+      why: "The 401 points the client at the metadata and names the scopes to ask for, so it can log in by itself.",
     };
   });
 

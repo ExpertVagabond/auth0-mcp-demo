@@ -4,7 +4,8 @@
 
 import { createServer } from "node:http";
 import { randomBytes, createHash } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { execFile } from "node:child_process";
 
 const domain = process.env.AUTH0_DOMAIN;
@@ -70,6 +71,7 @@ const server = createServer(async (req, res) => {
     });
     const t = await tokenRes.json();
     if (!t.access_token) throw new Error(`token exchange failed: ${t.error} ${t.error_description}`);
+    mkdirSync(dirname(tokenOut), { recursive: true, mode: 0o700 });
     writeFileSync(tokenOut, t.access_token, { mode: 0o600 });
     const p = JSON.parse(Buffer.from(t.access_token.split(".")[1], "base64url").toString());
     console.log("token saved (not printed). claims:", JSON.stringify({ sub: p.sub, aud: p.aud, scope: p.scope, permissions: p.permissions }));

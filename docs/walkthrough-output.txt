@@ -1,9 +1,9 @@
 Auth0 MCP demo: who can call what, and what gets refused
 
   Three local services are running:
-    issuer       stands in for Auth0 and signs real RS256 tokens   http://localhost:61013/
-    MCP server   the agent's tools, protected by those tokens      http://localhost:61014/mcp
-    reports API  a backend the MCP server calls for the user       http://localhost:61015
+    issuer       stands in for Auth0 and signs real RS256 tokens   http://localhost:61881/
+    MCP server   the agent's tools, protected by those tokens      http://localhost:61882/mcp
+    reports API  a backend the MCP server calls for the user       http://localhost:61883
 
   Six requests follow. Steps 1-3 and 5-6 should be refused; step 4 is the one allowed path.
 
@@ -13,8 +13,8 @@ Auth0 MCP demo: who can call what, and what gets refused
   Try:     Call the MCP server with no access token at all.
   Send:    POST /mcp   (no Authorization header)
   Result:  401 Unauthorized   PASS
-           WWW-Authenticate: Bearer resource_metadata="/.well-known/oauth-protected-resource"
-  Why:     The 401 points the client at the metadata, so it can find the authorization server itself.
+           WWW-Authenticate: Bearer resource_metadata="/.well-known/oauth-protected-resource", scope="read:reports read:github"
+  Why:     The 401 points the client at the metadata and names the scopes to ask for, so it can log in by itself.
 
 ────────────────────────────────────────────────────────────────────────
  STEP 2 of 6 · Wrong audience

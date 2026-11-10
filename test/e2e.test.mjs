@@ -95,7 +95,7 @@ test("no token: 401 with a resource_metadata challenge", async () => {
   const res = await rawPost();
   assert.equal(res.status, 401);
   const challenge = res.headers.get("www-authenticate");
-  assert.match(challenge, /^Bearer resource_metadata="http:\/\/localhost:4102\/\.well-known\/oauth-protected-resource"$/);
+  assert.match(challenge, /^Bearer resource_metadata="http:\/\/localhost:4102\/\.well-known\/oauth-protected-resource", scope="read:reports read:github"$/);
 });
 
 test("wrong audience is rejected", async () => {
