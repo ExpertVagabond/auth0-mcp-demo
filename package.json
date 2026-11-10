@@ -7,6 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "doctor": "node --env-file-if-exists=.env scripts/doctor.mjs",
     "demo": "node scripts/walkthrough.mjs",
     "test": "node --test test/e2e.test.mjs test/walkthrough.test.mjs",
     "start": "node --env-file-if-exists=.env server.mjs",

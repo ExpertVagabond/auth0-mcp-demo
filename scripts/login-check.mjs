@@ -22,6 +22,12 @@ if (!domain || !clientId || !audience || !tokenOut) {
   process.exit(1);
 }
 
+// RFC 9207 (required by the MCP authorization spec): record the issuer from the tenant's validated metadata before
+// redirecting, then check the `iss` in the authorization response against it before the code goes anywhere.
+const meta = await (await fetch(`https://${domain}/.well-known/openid-configuration`)).json();
+const expectedIssuer = meta.issuer;
+const issAdvertised = meta.authorization_response_iss_parameter_supported === true;
+
 const verifier = randomBytes(48).toString("base64url");
 const challenge = createHash("sha256").update(verifier).digest("base64url");
 const state = randomBytes(16).toString("base64url");
@@ -52,6 +58,14 @@ const server = createServer(async (req, res) => {
   if (url.searchParams.get("state") !== state || !url.searchParams.get("code")) {
     res.writeHead(400, { "content-type": "text/plain" }).end("state mismatch or no code");
     console.error("callback rejected: state mismatch or missing code");
+    server.close();
+    process.exit(1);
+  }
+  // Present: exact string match. Absent: reject only if the tenant advertises that it sends `iss`.
+  const iss = url.searchParams.get("iss");
+  if (iss !== null ? iss !== expectedIssuer : issAdvertised) {
+    res.writeHead(400, { "content-type": "text/plain" }).end("issuer mismatch");
+    console.error(`callback rejected: iss ${iss === null ? "missing" : `"${iss}"`}, expected "${expectedIssuer}" (RFC 9207)`);
     server.close();
     process.exit(1);
   }
@@ -87,7 +101,10 @@ const server = createServer(async (req, res) => {
 
 server.listen(8080, () => {
   console.log("waiting for login on http://localhost:8080/callback (10 minute limit)");
-  execFile("open", [authorize.toString()]);
+  console.log(`issuer check: expecting iss "${expectedIssuer}"${issAdvertised ? " (tenant advertises iss)" : ""}`);
+  console.log(`sign in here if no browser opens:\n${authorize}`);
+  // LOGIN_NO_BROWSER=1 skips opening a browser (CI, containers, agents); the URL above is enough.
+  if (!process.env.LOGIN_NO_BROWSER) execFile(process.platform === "darwin" ? "open" : "xdg-open", [authorize.toString()], () => {});
 });
 
 setTimeout(() => {

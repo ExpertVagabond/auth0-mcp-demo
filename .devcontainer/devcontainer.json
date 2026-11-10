@@ -1,0 +1,15 @@
+{
+  "name": "auth0-mcp-demo",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "postCreateCommand": "npm ci && npm run doctor",
+  "forwardPorts": [3000, 3100],
+  "portsAttributes": {
+    "3000": { "label": "MCP server" },
+    "3100": { "label": "Reports API" }
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["README.md", "guide/01-run-locally.md"]
+    }
+  }
+}

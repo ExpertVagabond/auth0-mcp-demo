@@ -99,7 +99,7 @@ If there's time, switch to the README tab and show the request-flow diagram.
 | 401 vs 403? | 401: we don't know who you are, or the token isn't for us. 403: we know who you are, you lack the permission, and we name the one you need. |
 | How does Token Vault fit? | The GitHub tool exchanges the user's token for the linked GitHub token inside the server. The agent gets the result, never the GitHub credential. |
 | What would you improve in Auth0? | [docs/FRICTION.md](../docs/FRICTION.md). Two examples: on-behalf-of errors that don't name the misconfigured client binding, and dynamically registered clients that can't use social logins. |
-| Does it follow the latest MCP spec? | Checked against the 2026-07-28 authorization spec in [docs/MCP-SPEC-CHECK.md](../docs/MCP-SPEC-CHECK.md). Every server MUST and SHOULD passes. One open item is client-side: the sign-in helper doesn't validate `iss` yet. The next step is moving from a pre-registered client to a Client ID Metadata Document, since dynamic registration is now deprecated. |
+| Does it follow the latest MCP spec? | Checked against the 2026-07-28 authorization spec in [docs/MCP-SPEC-CHECK.md](../docs/MCP-SPEC-CHECK.md). Every server MUST and SHOULD passes. The sign-in helper does PKCE, sends `resource`, and validates `iss` per RFC 9207. The next step is moving from a pre-registered client to a Client ID Metadata Document, since dynamic registration is now deprecated. |
 | How would you teach this? | This exact sequence as a workshop: one allowed call and five refusals, each with a named reason, then the same build against a real tenant. |
 
 ## If something breaks

@@ -19,4 +19,14 @@ test("walkthrough runs all six steps and exits 0", async () => {
   assert.equal((stdout.match(/^ {2}Result: .*PASS$/gm) ?? []).length, 6);
   assert.equal((stdout.match(/^ {2}✓ {2}\d/gm) ?? []).length, 6);
   assert.doesNotMatch(stdout, /\x1b\[/, "no ANSI codes when stdout is not a TTY");
+
+  // --json prints only a machine-readable result, for agents and CI.
+  const json = await new Promise((resolve) => {
+    execFile(process.execPath, [script, "--json"], { timeout: 60_000 }, (err, out) => resolve({ code: err ? (err.code ?? 1) : 0, out }));
+  });
+  assert.equal(json.code, 0);
+  const result = JSON.parse(json.out);
+  assert.equal(result.ok, true);
+  assert.deepEqual([result.passed, result.total], [6, 6]);
+  assert.deepEqual(result.steps.map((s) => s.status), [401, 401, 403, 200, 401, "400 and 413"]);
 });

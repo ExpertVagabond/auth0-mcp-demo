@@ -2,8 +2,11 @@
 
 Every error below was hit while building and verifying this project. The **Details** column links to the full write-up in [`docs/FRICTION.md`](../docs/FRICTION.md).
 
+**Start here:** run `npm run doctor`. It checks Node, dependencies, every `.env` value, your tenant and the ports, and prints the fix for anything that fails.
+
 | You see | Cause | Fix | Details |
 |---|---|---|---|
+| `callback rejected: iss ... expected ...` | The sign-in response came from a different issuer than `AUTH0_DOMAIN` | Check `AUTH0_DOMAIN`. If it's right, don't proceed: the response didn't come from your tenant | [RFC 9207](https://www.rfc-editor.org/rfc/rfc9207) |
 | Every tool call refused with `insufficient_scope` | The token has `permissions` but no `scope`, or the reverse | Set the API's token dialect to `rfc9068_profile_authz` and request the scopes at login | [5](../docs/FRICTION.md#5-auth0-puts-permissions-in-a-different-claim-than-my-first-build-assumed-confirmed-from-docs-fixed-in-code), [8](../docs/FRICTION.md#8-exchanged-tokens-have-no-scope-claim-confirmed-live) |
 | `permissions: []` after `npm run login` | The role was assigned after the token was issued | Assign the role (step 2.4), then sign in again | [9](../docs/FRICTION.md#9-setting-up-a-user-login-takes-four-separate-auth0-steps-confirmed-live) |
 | `token exchange failed: The user is not found` | A machine-to-machine token was used; on-behalf-of needs a user | Sign in with `npm run login` and use that token | — |

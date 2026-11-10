@@ -2,6 +2,14 @@
 
 Start both servers against your tenant, sign in, and call every tool with a real Auth0 token. About five minutes. You need a filled-in `.env` from [step 2](02-set-up-auth0.md).
 
+## 0. Check your settings
+
+```bash
+npm run doctor
+```
+
+Every line should be `PASS` (a saved token shows `INFO` until you sign in), ending with `Ready.` It checks that `.env` has no placeholders left, that the issuer is formatted correctly, that your tenant is reachable and supports token exchange, and that ports 3000, 3100 and 8080 are free. Each failure tells you the fix.
+
 ## 1. Start the reports API
 
 Terminal 1:
@@ -44,11 +52,17 @@ Terminal 3:
 npm run login
 ```
 
-On macOS the browser opens by itself. On other systems, open the authorize URL yourself. Sign in with the user who has the role from step 2.4. The script saves the access token to `.tokens/user-token` (ignored by git) without printing it, then prints the token's claims:
+The browser opens the Auth0 sign-in page. If it doesn't, open the URL the script prints. Set `LOGIN_NO_BROWSER=1` to skip opening a browser altogether, for example in a container. Sign in with the user who has the role from step 2.4.
 
 ```
+waiting for login on http://localhost:8080/callback (10 minute limit)
+issuer check: expecting iss "https://my-tenant.us.auth0.com/" (tenant advertises iss)
+sign in here if no browser opens:
+https://my-tenant.us.auth0.com/authorize?response_type=code&...
 token saved (not printed). claims: {"sub":"...","aud":["https://reports.demo.test/", ...],"scope":"openid profile email read:reports read:github","permissions":["read:github","read:reports"]}
 ```
+
+The script checks the `iss` in Auth0's response against your tenant before using the code (RFC 9207, as the MCP spec requires). Then it saves the access token to `.tokens/user-token` (ignored by git) without printing it, and prints the token's claims.
 
 `permissions` should list `read:reports`. If it's empty, assign the role and sign in again.
 

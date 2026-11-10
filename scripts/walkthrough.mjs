@@ -4,6 +4,7 @@
 //
 //   npm run demo            run straight through
 //   npm run demo -- --step  wait for Enter between steps
+//   npm run demo -- --json  print only a JSON result (for agents and CI)
 
 import http from "node:http";
 import net from "node:net";
@@ -14,8 +15,9 @@ import { createMcpApp } from "../server.mjs";
 import { createReportsApi } from "../reports-api.mjs";
 import { createMockIssuer, closeServer, freePorts, RESOURCE, REPORTS_AUD, OBO_CLIENT_ID, OBO_CLIENT_SECRET } from "../test/mock-issuer.mjs";
 
-const stepMode = process.argv.includes("--step");
-const useColor = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
+const jsonMode = process.argv.includes("--json");
+const stepMode = process.argv.includes("--step") && !jsonMode;
+const useColor = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR && !jsonMode;
 const paint = (code) => (s) => (useColor ? `\x1b[${code}m${s}\x1b[0m` : s);
 const bold = paint("1");
 const dim = paint("2");
@@ -23,7 +25,7 @@ const green = paint("32");
 const red = paint("31");
 const cyan = paint("36");
 
-const out = (line = "") => process.stdout.write(`${line}\n`);
+const out = (line = "") => (jsonMode ? undefined : process.stdout.write(`${line}\n`));
 
 let servers = [];
 let shuttingDown = false;
@@ -142,7 +144,7 @@ async function step(n, title, run) {
   const [first, ...rest] = outcome.result.split("\n");
   field("Result:", [`${bold(first)}   ${mark}`, ...rest].join("\n"));
   field("Why:", outcome.why);
-  results.push({ n, title, ok: outcome.ok, status: outcome.status });
+  results.push({ n, title, ok: outcome.ok, expected: outcome.expected, status: outcome.status });
   if (n < 6) await waitForEnter();
 }
 
@@ -296,6 +298,7 @@ async function main() {
   for (const r of results) out(`  ${r.ok ? green("✓") : red("✗")}  ${String(r.n)}  ${r.title.padEnd(40)}${r.status}`);
   out(cyan(RULE));
   const failed = results.filter((r) => !r.ok);
+  if (jsonMode) process.stdout.write(`${JSON.stringify({ ok: failed.length === 0, passed: results.length - failed.length, total: results.length, steps: results }, null, 2)}\n`);
   if (failed.length === 0) out(bold(green(`All ${results.length} steps matched their expected status.`)));
   else out(bold(red(`${failed.length} of ${results.length} steps did not match: ${failed.map((r) => r.n).join(", ")}`)));
   return failed.length === 0 ? 0 : 1;

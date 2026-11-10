@@ -23,7 +23,7 @@ How this server lines up with the [MCP authorization specification](https://mode
 | Clients **MUST** use PKCE | Authorization code + PKCE (S256) | ✅ |
 | Clients **MUST** send `resource` on authorization and token requests (RFC 8707) | Sends `resource` by default (`AUTH_PARAM=audience` switches to Auth0's older parameter) | ✅ |
 | Client registration: Client ID Metadata Documents **SHOULD**, pre-registration allowed, Dynamic Client Registration deprecated | Uses a pre-registered first-party app. Dynamic registration is avoided because registered clients can't use social logins ([FRICTION.md item 12](FRICTION.md#12-dynamically-registered-clients-cant-use-social-connections-confirmed-live-2026-10-21)) | ✅ allowed; CIMD is the natural next step |
-| Clients **MUST** validate `iss` in the authorization response (RFC 9207) when present | The tenant's **Include Issuer in Authorization Responses** is on, but the helper doesn't compare `iss` yet | ⚠️ to do |
+| Clients **MUST** record the issuer from validated metadata and check `iss` in the authorization response (RFC 9207) | The helper reads the tenant's metadata before redirecting. A present `iss` must match exactly. A missing `iss` is rejected when the tenant advertises `authorization_response_iss_parameter_supported`. Tested 2026-11-10 against the live tenant with forged callbacks: wrong `iss` rejected, missing `iss` rejected, correct `iss` accepted | ✅ (added 2026-11-10) |
 
 ## Choices worth knowing
 

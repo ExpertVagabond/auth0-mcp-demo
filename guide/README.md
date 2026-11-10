@@ -43,7 +43,8 @@ cp .env.example .env
 
 | Command | What it runs |
 |---|---|
-| `npm run demo` | The six-step local demo (no `.env` needed) |
+| `npm run doctor` | Preflight: what's ready, what's missing, and the fix for each |
+| `npm run demo` | The six-step local demo (no `.env` needed). `-- --step` to present, `-- --json` for a machine-readable result |
 | `npm test` | The test suite (no `.env` needed) |
 | `npm run start:api` | The reports API on port 3100 |
 | `npm start` | The MCP server on port 3000 |

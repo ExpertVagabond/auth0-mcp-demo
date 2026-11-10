@@ -16,7 +16,10 @@ The MCP server and reports API are the same code you run against Auth0 in step 3
 git clone https://github.com/ExpertVagabond/auth0-mcp-demo.git
 cd auth0-mcp-demo
 npm install
+npm run doctor
 ```
+
+`npm run doctor` should end with `Ready.` Without a `.env` it shows `INFO .env not found`, which is expected for this step.
 
 ## 2. Run the demo
 

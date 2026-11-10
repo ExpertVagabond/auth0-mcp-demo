@@ -3,6 +3,7 @@
 [![Tests](https://github.com/ExpertVagabond/auth0-mcp-demo/actions/workflows/test.yml/badge.svg)](https://github.com/ExpertVagabond/auth0-mcp-demo/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org/)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ExpertVagabond/auth0-mcp-demo)
 
 An MCP server for AI agents, protected by Auth0. It shows who can call which tool, and how everything else is refused:
 
@@ -49,8 +50,13 @@ Step 1 only needs Node.js and git.
 git clone https://github.com/ExpertVagabond/auth0-mcp-demo.git
 cd auth0-mcp-demo
 npm install
+npm run doctor           # preflight: checks Node, dependencies and (later) your Auth0 settings
 npm run demo -- --step
 ```
+
+Or open it in [GitHub Codespaces](https://codespaces.new/ExpertVagabond/auth0-mcp-demo) and run `npm run demo -- --step` there.
+
+**Using a coding agent?** Point it at [AGENTS.md](AGENTS.md). It has exact commands and success criteria, and `npm run demo -- --json` gives a machine-readable result.
 
 Press **Enter** to move through the six steps:
 
@@ -116,12 +122,15 @@ The GitHub tools appear only when token exchange is configured.
 |---|---|
 | `server.mjs` | The MCP server: token checks, per-tool permissions, token exchange, Token Vault tools |
 | `reports-api.mjs` | The backend the MCP server calls for the user |
-| `scripts/walkthrough.mjs` | The six-step demo (`npm run demo`) |
+| `scripts/walkthrough.mjs` | The six-step demo (`npm run demo`, `--step` to present, `--json` for agents) |
+| `scripts/doctor.mjs` | Preflight (`npm run doctor`): what's ready, what's missing, and how to fix it |
+| `AGENTS.md` | Instructions and success criteria for coding agents |
 | `scripts/login-check.mjs`, `live-check.mjs`, `connect-github.mjs` | Sign-in, tool check and account linking against a real tenant |
 | `test/` | The test suite, and the stand-in issuer shared with the demo |
 | `guide/` | Step-by-step guide, steps 0 to 5 |
 | `docs/` | [MCP spec check](docs/MCP-SPEC-CHECK.md), [developer-experience findings](docs/FRICTION.md), the [docs review](docs/DOCS-REVIEW.md), the [verification log](docs/VERIFICATION.md), and a saved demo run |
 | `.env.example` | Every setting for steps 3 and 4, explained |
+| `.devcontainer/`, `.nvmrc` | A reproducible Node 22 environment (Codespaces or VS Code) |
 | `log-receiver/` | A Cloudflare Worker that receives the tenant's log stream |
 
 ## Security
