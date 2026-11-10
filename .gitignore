@@ -1,6 +1,6 @@
 node_modules/
 
-# Credentials and tokens belong in ~/.config/auth0-mcp-demo, never in the repo.
+# Settings go in .env and tokens in .tokens/. Both are ignored: never commit credentials or tokens.
 .env
 .env.*
 !.env.example

@@ -104,7 +104,7 @@ export function createMcpApp({ issuer, resource, port, publicBase, reports, exch
   }
 
   function buildServer(auth) {
-    const server = new McpServer({ name: "auth0-mcp-demo", version: "0.1.0" });
+    const server = new McpServer({ name: "mcp-agent-identity-auth0", version: "0.1.0" });
 
     server.registerTool(
       "whoami",

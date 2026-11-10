@@ -13,8 +13,8 @@ The MCP server and reports API are the same code you run against Auth0 in step 3
 ## 1. Download and install
 
 ```bash
-git clone https://github.com/ExpertVagabond/auth0-mcp-demo.git
-cd auth0-mcp-demo
+git clone https://github.com/ExpertVagabond/mcp-agent-identity-auth0.git
+cd mcp-agent-identity-auth0
 npm install
 npm run doctor
 ```

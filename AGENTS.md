@@ -5,8 +5,8 @@ You can reproduce the whole local demo unattended. The Auth0 steps need a person
 ## Reproduce the demo (no account, no human)
 
 ```bash
-git clone https://github.com/ExpertVagabond/auth0-mcp-demo.git
-cd auth0-mcp-demo
+git clone https://github.com/ExpertVagabond/mcp-agent-identity-auth0.git
+cd mcp-agent-identity-auth0
 npm ci
 npm run doctor          # preflight: exit 0 means ready
 npm test                # expect: tests 23, pass 23, fail 0
@@ -49,6 +49,16 @@ Stop both servers when you're done.
 - **Never print a full Auth0 application object.** Application objects can include signing keys.
 - The identifiers `https://reports.demo.test/` and `https://reports-backend.demo.test/` are fixtures. A user's tenant may use others. Read them from `.env`.
 - If something fails, check [guide/troubleshooting.md](guide/troubleshooting.md) first. It maps each real error to its fix.
+
+## Changing this repo
+
+More than one agent works on this repo. To keep changes reviewable:
+
+1. **Branch and open a pull request.** Don't push to `main`. Use one PR per topic, with a title that says what changes.
+2. **Run `npm run verify` before you open the PR** and paste its four lines into the PR description. CI runs the same checks. Keep it green.
+3. **Keep the shape.** Guide pages are `guide/NN-*.md`, one per step. The demo's six items are *requests* (the guide's items are *steps*). Findings go in `docs/`.
+4. **Keep facts dated and sourced.** Live-tenant claims go in `docs/VERIFICATION.md` with the date they were checked. Don't change a test count, status or date you didn't re-run yourself.
+5. **Pull before you branch.** Rebase on `main` if it moved. Never force-push `main`.
 
 ## Map of the repo
 

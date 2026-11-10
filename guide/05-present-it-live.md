@@ -7,8 +7,8 @@ About five minutes. One terminal, one command, six requests. Each request on scr
 1. Clone and install, so nothing downloads live:
 
    ```bash
-   git clone https://github.com/ExpertVagabond/auth0-mcp-demo.git
-   cd auth0-mcp-demo
+   git clone https://github.com/ExpertVagabond/mcp-agent-identity-auth0.git
+   cd mcp-agent-identity-auth0
    npm install
    ```
 

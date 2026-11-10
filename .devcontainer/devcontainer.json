@@ -1,5 +1,5 @@
 {
-  "name": "auth0-mcp-demo",
+  "name": "mcp-agent-identity-auth0",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
   "postCreateCommand": "npm ci && npm run doctor",
   "forwardPorts": [3000, 3100],

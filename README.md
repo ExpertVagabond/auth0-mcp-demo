@@ -1,9 +1,9 @@
-# Auth0 MCP Demo
+# MCP Agent Identity with Auth0
 
-[![Tests](https://github.com/ExpertVagabond/auth0-mcp-demo/actions/workflows/test.yml/badge.svg)](https://github.com/ExpertVagabond/auth0-mcp-demo/actions/workflows/test.yml)
+[![Tests](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/actions/workflows/test.yml/badge.svg)](https://github.com/ExpertVagabond/mcp-agent-identity-auth0/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org/)
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ExpertVagabond/auth0-mcp-demo)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ExpertVagabond/mcp-agent-identity-auth0)
 
 One MCP server, protected by Auth0, and one story: **who can call which tool, and how everything else is refused.**
 
@@ -72,14 +72,14 @@ Stuck? Run `npm run doctor`, then see [Troubleshooting](guide/troubleshooting.md
 ## Download and run (local)
 
 ```bash
-git clone https://github.com/ExpertVagabond/auth0-mcp-demo.git
-cd auth0-mcp-demo
+git clone https://github.com/ExpertVagabond/mcp-agent-identity-auth0.git
+cd mcp-agent-identity-auth0
 npm install
 npm run doctor           # preflight: checks Node, dependencies and (later) your Auth0 settings
 npm run demo -- --step   # press Enter to move through the six requests
 ```
 
-Or open it in [GitHub Codespaces](https://codespaces.new/ExpertVagabond/auth0-mcp-demo) and run the same commands there.
+Or open it in [GitHub Codespaces](https://codespaces.new/ExpertVagabond/mcp-agent-identity-auth0) and run the same commands there.
 
 **Using a coding agent?** Point it at [AGENTS.md](AGENTS.md). It has exact commands and success criteria, and `npm run demo -- --json` gives a machine-readable result.
 

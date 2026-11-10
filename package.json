@@ -1,7 +1,7 @@
 {
-  "name": "auth0-mcp-demo",
+  "name": "mcp-agent-identity-auth0",
   "version": "1.0.0",
-  "description": "An MCP server protected by Auth0: per-tool permissions, on-behalf-of token exchange and Token Vault, with a six-step demo of the allowed and refused paths.",
+  "description": "An MCP server protected by Auth0: per-tool permissions, on-behalf-of token exchange and Token Vault, with a six-request demo of the allowed and refused paths, run locally or against a live tenant.",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -19,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ExpertVagabond/auth0-mcp-demo.git"
+    "url": "https://github.com/ExpertVagabond/mcp-agent-identity-auth0.git"
   },
   "author": "Matthew Karsten",
   "license": "MIT",
